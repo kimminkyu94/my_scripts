@@ -3,4 +3,4 @@ pydantic
 requests
 python-dotenv
 openai
-whisper
+whisper==1.0.0
