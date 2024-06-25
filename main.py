@@ -7,6 +7,7 @@ import openai
 import logging
 import time
 from dotenv import load_dotenv
+import whisper
 
 load_dotenv()
 
@@ -22,8 +23,6 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 openai.api_key = OPENAI_API_KEY
 
-# Ensure whisper is correctly imported and used
-import whisper
 model = whisper.load_model("base")
 
 class AutomationRequest(BaseModel):
@@ -147,4 +146,5 @@ def create_videos_task(request: AutomationRequest):
     youtube_url = 'https://youtube.com/dummy_url'
     update_airtable_record(request.record_id, 'youtube1', youtube_url)
     logging.debug("Video processing completed")
+
 
