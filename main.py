@@ -4,7 +4,6 @@ import subprocess
 import requests
 import os
 import openai
-import whisper
 import logging
 import time
 from dotenv import load_dotenv
@@ -22,7 +21,10 @@ FFMPEG_PATH = os.getenv('FFMPEG_PATH')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 openai.api_key = OPENAI_API_KEY
-whisper_model = whisper.load_model("medium")
+
+# Ensure whisper is correctly imported and used
+import whisper
+whisper_model = whisper.load_model("base")
 
 class AutomationRequest(BaseModel):
     action: str
@@ -113,7 +115,7 @@ def update_airtable_record(record_id, field_name, field_value):
         }
     }
     logging.debug(f"Updating Airtable record {record_id} with {field_name}: {field_value}")
-    response = requests.patch(url, headers=headers, json=data)
+    response = requests.patch(url, headers=headers, json(data))
     response.raise_for_status()
     logging.debug(f"Updated Airtable record {record_id}")
 
