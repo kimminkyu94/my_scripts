@@ -115,7 +115,7 @@ def update_airtable_record(record_id, field_name, field_value):
         }
     }
     logging.debug(f"Updating Airtable record {record_id} with {field_name}: {field_value}")
-    response = requests.patch(url, headers=headers, json=data)
+    response = requests.patch(url, headers=headers, json(data))
     response.raise_for_status()
     logging.debug(f"Updated Airtable record {record_id}")
 
@@ -147,3 +147,9 @@ def create_videos_task(request: AutomationRequest):
     youtube_url = 'https://youtube.com/dummy_url'
     update_airtable_record(request.record_id, 'youtube1', youtube_url)
     logging.debug("Video processing completed")
+
+# Ensure the application binds to the correct port on Heroku
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=port)
