@@ -23,6 +23,7 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 openai.api_key = OPENAI_API_KEY
 
+# Correct method to load the Whisper model
 model = whisper.load_model("base")
 
 class AutomationRequest(BaseModel):
