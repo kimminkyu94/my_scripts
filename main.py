@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 import subprocess
@@ -25,7 +24,7 @@ openai.api_key = OPENAI_API_KEY
 
 # Ensure whisper is correctly imported and used
 import whisper
-whisper_model = whisper.load_model("base")
+model = whisper.load_model("base")
 
 class AutomationRequest(BaseModel):
     action: str
@@ -49,7 +48,7 @@ def download_file(url, local_filename):
 
 def generate_subtitles(input_video_path, output_subtitles_path):
     logging.debug(f"Generating subtitles for {input_video_path}")
-    result = whisper_model.transcribe(input_video_path)
+    result = model.transcribe(input_video_path)
     with open(output_subtitles_path, 'w', encoding='utf-8') as f:
         for segment in result['segments']:
             f.write(f"{segment['start']:.3f} --> {segment['end']:.3f}\n{segment['text']}\n\n")
@@ -116,7 +115,7 @@ def update_airtable_record(record_id, field_name, field_value):
         }
     }
     logging.debug(f"Updating Airtable record {record_id} with {field_name}: {field_value}")
-    response = requests.patch(url, headers=headers, json=data)  # Fix: changed json(data) to json=data
+    response = requests.patch(url, headers=headers, json=data)
     response.raise_for_status()
     logging.debug(f"Updated Airtable record {record_id}")
 
