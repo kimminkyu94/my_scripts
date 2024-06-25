@@ -146,5 +146,3 @@ def create_videos_task(request: AutomationRequest):
     youtube_url = 'https://youtube.com/dummy_url'
     update_airtable_record(request.record_id, 'youtube1', youtube_url)
     logging.debug("Video processing completed")
-
-
