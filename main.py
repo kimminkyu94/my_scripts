@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 import subprocess
@@ -115,7 +116,7 @@ def update_airtable_record(record_id, field_name, field_value):
         }
     }
     logging.debug(f"Updating Airtable record {record_id} with {field_name}: {field_value}")
-    response = requests.patch(url, headers=headers, json(data))
+    response = requests.patch(url, headers=headers, json=data)
     response.raise_for_status()
     logging.debug(f"Updated Airtable record {record_id}")
 
