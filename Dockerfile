@@ -1,7 +1,7 @@
 FROM python:3.8-slim
 
 # Install dependencies
-RUN apt-get update && apt-get install -y ffmpeg
+RUN apt-get update && apt-get install -y ffmpeg git
 
 # Copy application code
 COPY . /app
