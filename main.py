@@ -147,7 +147,6 @@ def create_videos_task(request: AutomationRequest):
     update_airtable_record(request.record_id, 'youtube1', youtube_url)
     logging.debug("Video processing completed")
 
-# Ensure the application binds to the correct port on Cloud Runif __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
+# Ensure the application binds to the correct port on Cloud Run if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
