@@ -1,17 +1,20 @@
-FROM python:3.8-slim
+# Use the official Python image from the Docker Hub
+FROM python:3.9-slim
 
-# Install dependencies
-RUN apt-get update && apt-get install -y ffmpeg git
-
-# Copy application code
-COPY . /app
+# Set the working directory
 WORKDIR /app
 
-# Install Python dependencies
+# Copy the current directory contents into the container
+COPY . /app
+
+# Install the required packages
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Set environment variables
-ENV PORT 8080
+# Make port 8000 available to the world outside this container
+EXPOSE 8000
 
-# Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Define environment variable
+ENV NAME World
+
+# Run app.py when the container launches
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
