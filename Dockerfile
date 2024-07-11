@@ -4,6 +4,9 @@ FROM python:3.9-slim
 # Set the working directory
 WORKDIR /app
 
+# Install git
+RUN apt-get update && apt-get install -y git
+
 # Copy the current directory contents into the container
 COPY . /app
 
