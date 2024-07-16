@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 import subprocess
@@ -120,8 +119,7 @@ def update_airtable_record(record_id, field_name, field_value):
     response.raise_for_status()
     logging.debug(f"Updated Airtable record {record_id}")
 
-@app.post("/automate/")
-async def automate(request: AutomationRequest, background_tasks: BackgroundTasks):
+@app.post("/automate/")async def automate(request: AutomationRequest, background_tasks: BackgroundTasks):
     if request.action == "create_subtitles":
         background_tasks.add_task(create_subtitles_task, request)
     elif request.action == "create_videos":
@@ -149,8 +147,6 @@ def create_videos_task(request: AutomationRequest):
     update_airtable_record(request.record_id, 'youtube1', youtube_url)
     logging.debug("Video processing completed")
 
-# Ensure the application binds to the correct port on Heroku
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
+# Ensure the application binds to the correct port on Cloud Run if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
