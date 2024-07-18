@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Build and Deploy to Cloud Run
 
 on:
   push:
@@ -29,3 +29,16 @@ jobs:
         context: .
         push: true
         tags: gcr.io/sublime-sunspot-420109/subtitle-generator:latest
+
+    - name: Deploy to Cloud Run
+      env:
+        CLOUDSDK_CORE_PROJECT: sublime-sunspot-420109
+        CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: ${{ secrets.GCP_KEY }}
+      run: |
+        gcloud auth activate-service-account --key-file ${{ secrets.GCP_KEY }}
+        gcloud run deploy subtitle-service \
+          --image gcr.io/sublime-sunspot-420109/subtitle-generator:latest \
+          --platform managed \
+          --region us-central1 \
+          --allow-unauthenticated \
+          --memory 1Gi
