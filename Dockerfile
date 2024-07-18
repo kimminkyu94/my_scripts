@@ -4,14 +4,15 @@ FROM python:3.9-slim
 # Set the working directory
 WORKDIR /app
 
-# Install git
-RUN apt-get update && apt-get install -y git
-
-# Copy the current directory contents into the container
-COPY . /app
+# Install git and ffmpeg
+RUN apt-get update && apt-get install -y git ffmpeg
 
 # Install the required packages
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the current directory contents into the container
+COPY . .
 
 # Make port 8080 available to the world outside this container
 EXPOSE 8080
@@ -21,4 +22,3 @@ ENV NAME World
 
 # Run app.py when the container launches
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
-RUN apt-get update && apt-get install -y ffmpeg
