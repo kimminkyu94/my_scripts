@@ -49,13 +49,19 @@ def handle_subtitle_request(request):
     # Parse the incoming request data
     data = request.get_json(silent=True)
     if not data:
+        print("Error: No data received or invalid JSON.")
         return jsonify({'error': 'Invalid or missing payload'}), 400
+
+    # Log the entire payload for debugging
+    print("Received payload:", data)
 
     # Check for required fields in the payload
     action = data.get('action')
     video_url = data.get('video_url')
 
+    # Validate required fields
     if action != 'create_subtitles' or not video_url:
+        print(f"Error: Missing or invalid fields - Action: {action}, Video URL: {video_url}")
         return jsonify({'error': 'Missing or invalid required fields: action, video_url'}), 400
 
     # Extract and translate subtitles
@@ -72,4 +78,3 @@ def handle_subtitle_request(request):
 # This function will be triggered by an HTTP request
 def make_subtitle(request):
     return handle_subtitle_request(request)
-
