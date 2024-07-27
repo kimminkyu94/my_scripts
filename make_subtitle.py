@@ -1,11 +1,48 @@
 import os
 import json
 from google.cloud import storage
-from flask import jsonify, request
+from flask import Flask, jsonify, request
+
+# Initialize Flask app
+app = Flask(__name__)
 
 # Initialize Google Cloud Storage client
 storage_client = storage.Client()
 output_bucket_name = 'allcloudstorage2'  # Output bucket for storing subtitles
+
+@app.route('/automate', methods=['POST'])
+def handle_subtitle_request():
+    # Log the raw request data for debugging
+    print("Raw request data:", request.data)
+
+    # Parse the incoming request data
+    data = request.get_json(silent=True)
+    if not data:
+        print("Error: No data received or invalid JSON.")
+        return jsonify({'error': 'Invalid or missing payload'}), 400
+
+    # Log the parsed JSON data for debugging
+    print("Parsed JSON data:", data)
+
+    # Check for required fields in the payload
+    action = data.get('action')
+    video_url = data.get('video_url')
+
+    # Validate required fields
+    if action != 'create_subtitles' or not video_url:
+        print(f"Error: Missing or invalid fields - Action: {action}, Video URL: {video_url}")
+        return jsonify({'error': 'Missing or invalid required fields: action, video_url'}), 400
+
+    # Extract and translate subtitles
+    subtitles = extract_and_translate_subtitles(video_url)
+    
+    # Extract video name from URL (assuming the video URL contains the file name)
+    video_name = os.path.splitext(os.path.basename(video_url))[0]
+
+    # Save the subtitles
+    save_subtitles(subtitles, video_name)
+
+    return jsonify({'message': 'Subtitles created and saved successfully'}), 200
 
 def extract_and_translate_subtitles(video_url):
     """
@@ -45,39 +82,6 @@ def save_subtitles(subtitles, video_name):
         blob.upload_from_string(subtitle_content)
         print(f"Saved subtitle for {country} at {destination_blob_name}")
 
-def handle_subtitle_request(request):
-    # Log the raw request data for debugging
-    print("Raw request data:", request.data)
-
-    # Parse the incoming request data
-    data = request.get_json(silent=True)
-    if not data:
-        print("Error: No data received or invalid JSON.")
-        return jsonify({'error': 'Invalid or missing payload'}), 400
-
-    # Log the parsed JSON data for debugging
-    print("Parsed JSON data:", data)
-
-    # Check for required fields in the payload
-    action = data.get('action')
-    video_url = data.get('video_url')
-
-    # Validate required fields
-    if action != 'create_subtitles' or not video_url:
-        print(f"Error: Missing or invalid fields - Action: {action}, Video URL: {video_url}")
-        return jsonify({'error': 'Missing or invalid required fields: action, video_url'}), 400
-
-    # Extract and translate subtitles
-    subtitles = extract_and_translate_subtitles(video_url)
-    
-    # Extract video name from URL (assuming the video URL contains the file name)
-    video_name = os.path.splitext(os.path.basename(video_url))[0]
-
-    # Save the subtitles
-    save_subtitles(subtitles, video_name)
-
-    return jsonify({'message': 'Subtitles created and saved successfully'}), 200
-
-# This function will be triggered by an HTTP request
-def make_subtitle(request):
-    return handle_subtitle_request(request)
+# Start the Flask app
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
