@@ -46,14 +46,17 @@ def save_subtitles(subtitles, video_name):
         print(f"Saved subtitle for {country} at {destination_blob_name}")
 
 def handle_subtitle_request(request):
+    # Log the raw request data for debugging
+    print("Raw request data:", request.data)
+
     # Parse the incoming request data
     data = request.get_json(silent=True)
     if not data:
         print("Error: No data received or invalid JSON.")
         return jsonify({'error': 'Invalid or missing payload'}), 400
 
-    # Log the entire payload for debugging
-    print("Received payload:", data)
+    # Log the parsed JSON data for debugging
+    print("Parsed JSON data:", data)
 
     # Check for required fields in the payload
     action = data.get('action')
