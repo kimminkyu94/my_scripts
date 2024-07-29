@@ -27,15 +27,20 @@ def handle_subtitle_request():
         print(f"Error parsing JSON: {e}")
         return jsonify({'error': 'Error parsing payload'}), 400
 
-    # Check for required fields in the payload
+    # Validate the payload
     action = data.get('action')
     video_url = data.get('video_url')
-
     if action != 'create_subtitles' or not video_url:
         print(f"Error: Missing or invalid fields - Action: {action}, Video URL: {video_url}")
         return jsonify({'error': 'Missing or invalid required fields: action, video_url'}), 400
 
     try:
+        # Validate the video URL and format
+        if not validate_video_url(video_url):
+            print(f"Error: Unsupported video format or inaccessible file at URL: {video_url}")
+            return jsonify({'error': 'Unsupported video format or inaccessible file'}), 422
+        
+        # Extract and translate subtitles
         subtitles = extract_and_translate_subtitles(video_url)
         if not subtitles:
             print("Error: No subtitles generated.")
@@ -57,6 +62,14 @@ def handle_subtitle_request():
 
     return jsonify({'message': 'Subtitles created and saved successfully'}), 200
 
+def validate_video_url(video_url):
+    # Placeholder function to validate video URL and format
+    # This function should check if the URL points to a valid file that is accessible
+    # and whether the file format is supported
+    print(f"Validating video URL: {video_url}")
+    # Implement actual validation logic here
+    return True
+
 def extract_and_translate_subtitles(video_url):
     print(f"Attempting to extract subtitles from video URL: {video_url}")
     
@@ -66,7 +79,7 @@ def extract_and_translate_subtitles(video_url):
             "America": "Sample subtitle content",
             # Real logic will generate actual subtitles here
         }
-        print("Subtitles extraction succeeded.")
+        print(f"Subtitles extraction succeeded. Languages: {list(subtitles.keys())}")
         return subtitles
     except Exception as e:
         print(f"Error during subtitle extraction: {e}")
