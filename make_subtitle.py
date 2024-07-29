@@ -2,6 +2,7 @@ import os
 import json
 from google.cloud import storage
 from flask import Flask, jsonify, request
+import traceback
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -12,75 +13,82 @@ output_bucket_name = 'allcloudstorage2'  # Output bucket for storing subtitles
 
 @app.route('/automate', methods=['POST'])
 def handle_subtitle_request():
-    # Log the raw request data for debugging
+    print("Received request for subtitle creation.")
     print("Raw request data:", request.data)
 
     # Parse the incoming request data
-    data = request.get_json(silent=True)
-    if not data:
-        print("Error: No data received or invalid JSON.")
-        return jsonify({'error': 'Invalid or missing payload'}), 400
-
-    # Log the parsed JSON data for debugging
-    print("Parsed JSON data:", data)
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            print("Error: No data received or invalid JSON.")
+            return jsonify({'error': 'Invalid or missing payload'}), 400
+        print("Parsed JSON data:", data)
+    except Exception as e:
+        print(f"Error parsing JSON: {e}")
+        return jsonify({'error': 'Error parsing payload'}), 400
 
     # Check for required fields in the payload
     action = data.get('action')
     video_url = data.get('video_url')
 
-    # Validate required fields
     if action != 'create_subtitles' or not video_url:
         print(f"Error: Missing or invalid fields - Action: {action}, Video URL: {video_url}")
         return jsonify({'error': 'Missing or invalid required fields: action, video_url'}), 400
 
-    # Extract and translate subtitles
-    subtitles = extract_and_translate_subtitles(video_url)
-    
-    # Extract video name from URL (assuming the video URL contains the file name)
-    video_name = os.path.splitext(os.path.basename(video_url))[0]
+    try:
+        subtitles = extract_and_translate_subtitles(video_url)
+        if not subtitles:
+            print("Error: No subtitles generated.")
+            return jsonify({'error': 'Subtitle extraction failed'}), 422
 
-    # Save the subtitles
-    save_subtitles(subtitles, video_name)
+        # Extract video name from URL
+        video_name = os.path.splitext(os.path.basename(video_url))[0]
+        save_subtitles(subtitles, video_name)
+    except FileNotFoundError:
+        print(f"Error: File not found at URL: {video_url}")
+        return jsonify({'error': 'File not found'}), 422
+    except UnsupportedFormatError:
+        print(f"Error: Unsupported video format for URL: {video_url}")
+        return jsonify({'error': 'Unsupported video format'}), 422
+    except Exception as e:
+        print(f"Unexpected error during subtitle extraction: {e}")
+        print("Stack trace:", traceback.format_exc())
+        return jsonify({'error': 'Internal server error'}), 500
 
     return jsonify({'message': 'Subtitles created and saved successfully'}), 200
 
 def extract_and_translate_subtitles(video_url):
-    """
-    Extract and translate subtitles from the video.
-    This function should implement the logic to extract subtitles using a tool like Whisper,
-    and then translate those subtitles using an API like OpenAI.
-    """
-    # Placeholder implementation for demonstration
-    subtitles = {
-        "America": "English subtitles content",
-        "Brazil": "Portuguese subtitles content",
-        "Filipin": "Filipino subtitles content",
-        "Indonesia": "Indonesian subtitles content",
-        "Japan": "Japanese subtitles content",
-        "Korea": "Korean subtitles content",
-        "Malaysia": "Malay subtitles content",
-        "Mexico": "Spanish subtitles content",
-        "Thailand": "Thai subtitles content",
-        "United_Kingdom": "British English subtitles content",
-        "Vietnam": "Vietnamese subtitles content"
-        # Add more languages as needed
-    }
-    return subtitles
+    print(f"Attempting to extract subtitles from video URL: {video_url}")
+    
+    try:
+        # Placeholder for actual Whisper processing logic
+        subtitles = {
+            "America": "Sample subtitle content",
+            # Real logic will generate actual subtitles here
+        }
+        print("Subtitles extraction succeeded.")
+        return subtitles
+    except Exception as e:
+        print(f"Error during subtitle extraction: {e}")
+        print("Stack trace:", traceback.format_exc())
+        raise
 
 def save_subtitles(subtitles, video_name):
-    """
-    Save the subtitles to Google Cloud Storage under the 'sub' folder.
-    """
+    print(f"Saving subtitles for video: {video_name}")
     for country, subtitle_content in subtitles.items():
-        folder_name = f"sub/{country}"  # Folder path includes 'sub' and country
-        file_name = f"{video_name}_{country}.srt"  # Subtitle file name, e.g., video_America.srt
+        folder_name = f"sub/{country}"
+        file_name = f"{video_name}_{country}.srt"
         destination_blob_name = f"{folder_name}/{file_name}"
         
-        # Upload the file to the output bucket
-        bucket = storage_client.bucket(output_bucket_name)
-        blob = bucket.blob(destination_blob_name)
-        blob.upload_from_string(subtitle_content)
-        print(f"Saved subtitle for {country} at {destination_blob_name}")
+        try:
+            bucket = storage_client.bucket(output_bucket_name)
+            blob = bucket.blob(destination_blob_name)
+            blob.upload_from_string(subtitle_content)
+            print(f"Saved subtitle for {country} at {destination_blob_name}")
+        except Exception as e:
+            print(f"Error saving subtitle for {country}: {e}")
+            print("Stack trace:", traceback.format_exc())
+            raise
 
 # Start the Flask app
 if __name__ == '__main__':
