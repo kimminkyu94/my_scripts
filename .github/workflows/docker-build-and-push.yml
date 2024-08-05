@@ -1,14 +1,11 @@
 name: Build and Deploy to Cloud Run
-
 on:
   push:
     branches:
       - main
-
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
@@ -53,4 +50,5 @@ jobs:
           --platform managed \
           --region us-central1 \
           --allow-unauthenticated \
-          --memory 1Gi
+          --memory 1Gi \
+          --set-env-vars OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
