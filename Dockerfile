@@ -18,7 +18,8 @@ COPY . .
 EXPOSE 8080
 
 # Define environment variable
-ENV NAME World
+ENV PORT 8080
 
 # Run make_subtitle.py when the container launches
 CMD ["uvicorn", "make_subtitle:app", "--host", "0.0.0.0", "--port", "8080"]
+
