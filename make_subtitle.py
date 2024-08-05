@@ -5,6 +5,7 @@ import requests
 import traceback
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from google.cloud import storage
 
 app = FastAPI()
 
@@ -13,6 +14,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Set OpenAI API key from environment variable
 openai.api_key = os.getenv('OPENAI_API_KEY')
+logging.info(f"OpenAI API Key Loaded: {bool(openai.api_key)}")
 
 class VideoUrl(BaseModel):
     videoUrl: str
@@ -21,6 +23,7 @@ class VideoUrl(BaseModel):
 def process_video(video: VideoUrl):
     try:
         subtitles = extract_subtitles(video.videoUrl)
+        save_to_cloud_storage(video.videoUrl, subtitles)
         return {"subtitles": subtitles}
     except Exception as e:
         logging.error(f"Error in processing: {e}")
@@ -63,7 +66,11 @@ def transcribe_audio_with_whisper(audio_file_path):
                 response_format='verbose_json'
             )
             logging.info(f"API response: {response}")
-            return response.get('segments', [])
+            if 'segments' in response:
+                return response['segments']
+            else:
+                logging.error("Unexpected API response format: %s", response)
+                return []
     except Exception as e:
         logging.error(f"Error during transcription: {e}")
         logging.error("Stack trace: %s", traceback.format_exc())
@@ -101,3 +108,16 @@ def extract_subtitles(video_url):
     subtitles = format_to_srt(segments)
     logging.info("Subtitles extraction succeeded.")
     return subtitles
+
+def save_to_cloud_storage(video_url, subtitles):
+    logging.info("Attempting to save subtitles to Cloud Storage")
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket('allcloudstorage2')
+        blob = bucket.blob(f"{os.path.basename(video_url)}.srt")
+        blob.upload_from_string(subtitles)
+        logging.info(f"Subtitles saved to Cloud Storage: {blob.name}")
+    except Exception as e:
+        logging.error(f"Error saving subtitles to Cloud Storage: {e}")
+        logging.error("Stack trace: %s", traceback.format_exc())
+        raise
