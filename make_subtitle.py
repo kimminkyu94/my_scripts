@@ -11,7 +11,7 @@ app = FastAPI()
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
-# Set OpenAI API key
+# Set OpenAI API key from environment variable
 openai.api_key = os.getenv('OPENAI_API_KEY')
 
 class VideoUrl(BaseModel):
