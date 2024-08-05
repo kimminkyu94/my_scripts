@@ -1,7 +1,7 @@
+import os
 import openai
 import logging
 import requests
-import os
 import traceback
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -44,7 +44,7 @@ def validate_video_url(video_url):
 def download_audio_from_video(video_url, filename):
     logging.info("Downloading audio file from: %s", video_url)
     response = requests.get(video_url, stream=True)
-    if response.status_code == 200):
+    if response.status_code == 200:
         with open(filename, 'wb') as f:
             for chunk in response.iter_content(1024):
                 f.write(chunk)
@@ -101,4 +101,3 @@ def extract_subtitles(video_url):
     subtitles = format_to_srt(segments)
     logging.info("Subtitles extraction succeeded.")
     return subtitles
-
