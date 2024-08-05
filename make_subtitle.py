@@ -64,7 +64,7 @@ def transcribe_audio_with_whisper(audio_file_path):
                 model="whisper-1",
                 file=audio_file,
                 response_format='verbose_json',
-                language='ko'  # Specify Korean language fr better accuracy
+                language='ko'  # Specify Korean language for better accuracy
             )
             logging.info(f"API response: {response}")
             return response.get('segments', [])
@@ -81,32 +81,8 @@ def format_to_srt(segments):
         end_time = segment['end']
         text = segment['text'].strip()
         
-        # Split long lines into multiple subtitles
-        words = text.split()
-        lines = []
-        current_line = []
-        
-        for word in words:
-            if len(' '.join(current_line + [word])) > 40:
-                lines.append(' '.join(current_line))
-                current_line = [word]
-            else:
-                current_line.append(word)
-        
-        if current_line:
-            lines.append(' '.join(current_line))
-        
-        # If the segment is split into multiple lines, adjust timing
-        if len(lines) > 1:
-            time_per_line = (end_time - start_time) / len(lines)
-            for i, line in enumerate(lines):
-                line_start = start_time + i * time_per_line
-                line_end = line_start + time_per_line
-                subtitles.append(f"{subtitle_index}\n{convert_time(line_start)} --> {convert_time(line_end)}\n{line}")
-                subtitle_index += 1
-        else:
-            subtitles.append(f"{subtitle_index}\n{convert_time(start_time)} --> {convert_time(end_time)}\n{text}")
-            subtitle_index += 1
+        subtitles.append(f"{subtitle_index}\n{convert_time(start_time)} --> {convert_time(end_time)}\n{text}")
+        subtitle_index += 1
     
     return "\n\n".join(subtitles)
 
@@ -140,7 +116,7 @@ def save_to_cloud_storage(video_url, subtitles):
         storage_client = storage.Client()
         bucket = storage_client.bucket('allcloudstorage2')
         blob = bucket.blob(f"{os.path.basename(video_url)}.srt")
-        blob.upload_from_string(subtitles)
+        blob.upload_from_string(subtitles.encode('utf-8'))  # Ensure UTF-8 encoding
         logging.info(f"Subtitles saved to Cloud Storage: {blob.name}")
     except Exception as e:
         logging.error(f"Error saving subtitles to Cloud Storage: {e}")
