@@ -3,5 +3,5 @@ uvicorn
 pydantic
 requests
 python-dotenv
-openai
+openai==0.28.0
 git+https://github.com/openai/whisper.git
