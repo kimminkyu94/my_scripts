@@ -101,3 +101,4 @@ def extract_subtitles(video_url):
     subtitles = format_to_srt(segments)
     logging.info("Subtitles extraction succeeded.")
     return subtitles
+
