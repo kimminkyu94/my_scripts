@@ -1,71 +1,30 @@
-import os
-import json
-from google.cloud import storage
-from flask import Flask, jsonify, request
-import traceback
+import openai
 import logging
 import requests
+import os
+import traceback
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
-# Initialize Flask app
-app = Flask(__name__)
-
-# Initialize Google Cloud Storage client
-storage_client = storage.Client()
-output_bucket_name = 'allcloudstorage2'  # Output bucket for storing subtitles
+app = FastAPI()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
-@app.route('/automate', methods=['POST'])
-def handle_subtitle_request():
-    logging.info("Received request for subtitle creation.")
-    logging.info("Raw request data: %s", request.data)
+# Set OpenAI API key
+openai.api_key = os.getenv('OPENAI_API_KEY')
 
-    # Parse the incoming request data
+class VideoUrl(BaseModel):
+    videoUrl: str
+
+@app.post("/process")
+def process_video(video: VideoUrl):
     try:
-        data = request.get_json(silent=True)
-        if not data:
-            logging.error("Error: No data received or invalid JSON.")
-            return jsonify({'error': 'Invalid or missing payload'}), 400
-        logging.info("Parsed JSON data: %s", data)
+        subtitles = extract_subtitles(video.videoUrl)
+        return {"subtitles": subtitles}
     except Exception as e:
-        logging.error("Error parsing JSON: %s", e)
-        return jsonify({'error': 'Error parsing payload'}), 400
-
-    # Validate the payload
-    action = data.get('action')
-    video_url = data.get('video_url')
-    if action != 'create_subtitles' or not video_url:
-        logging.error("Error: Missing or invalid fields - Action: %s, Video URL: %s", action, video_url)
-        return jsonify({'error': 'Missing or invalid required fields: action, video_url'}), 400
-
-    try:
-        # Validate the video URL and format
-        if not validate_video_url(video_url):
-            logging.error("Error: Unsupported video format or inaccessible file at URL: %s", video_url)
-            return jsonify({'error': 'Unsupported video format or inaccessible file'}), 422
-        
-        # Extract and translate subtitles
-        subtitles = extract_and_translate_subtitles(video_url)
-        if not subtitles:
-            logging.error("Error: No subtitles generated.")
-            return jsonify({'error': 'Subtitle extraction failed'}), 422
-
-        # Extract video name from URL
-        video_name = os.path.splitext(os.path.basename(video_url))[0]
-        save_subtitles(subtitles, video_name)
-    except FileNotFoundError:
-        logging.error("Error: File not found at URL: %s", video_url)
-        return jsonify({'error': 'File not found'}), 422
-    except UnsupportedFormatError:
-        logging.error("Error: Unsupported video format for URL: %s", video_url)
-        return jsonify({'error': 'Unsupported video format'}), 422
-    except Exception as e:
-        logging.error("Unexpected error during subtitle extraction: %s", e)
-        logging.error("Stack trace: %s", traceback.format_exc())
-        return jsonify({'error': 'Internal server error'}), 500
-
-    return jsonify({'message': 'Subtitles created and saved successfully'}), 200
+        logging.error(f"Error in processing: {e}")
+        raise HTTPException(status_code=500, detail="Error processing video")
 
 def validate_video_url(video_url):
     logging.info("Validating video URL: %s", video_url)
@@ -73,7 +32,7 @@ def validate_video_url(video_url):
         response = requests.head(video_url)
         content_type = response.headers.get('Content-Type', '')
         if 'video' in content_type:
-            logging.info("Valid video content type: %content_type", content_type)
+            logging.info("Valid video content type: %s", content_type)
             return True
         else:
             logging.error("Invalid content type: %s", content_type)
@@ -82,38 +41,63 @@ def validate_video_url(video_url):
         logging.error("Error accessing the URL: %s", e)
         return False
 
-def extract_and_translate_subtitles(video_url):
-    logging.info("Attempting to extract subtitles from video URL: %s", video_url)
+def download_audio_from_video(video_url, filename):
+    logging.info("Downloading audio file from: %s", video_url)
+    response = requests.get(video_url, stream=True)
+    if response.status_code == 200):
+        with open(filename, 'wb') as f:
+            for chunk in response.iter_content(1024):
+                f.write(chunk)
+        logging.info("Downloaded file saved to: %s", filename)
+        return filename
+    else:
+        logging.error("Failed to download video/audio. Status code: %s", response.status_code)
+        return None
+
+def transcribe_audio_with_whisper(audio_file_path):
     try:
-        # Placeholder for actual Whisper processing logic
-        subtitles = {
-            "America": "Sample subtitle content",
-            # Real logic will generate actual subtitles here
-        }
-        logging.info("Subtitles extraction succeeded. Languages: %s", list(subtitles.keys()))
-        return subtitles
+        with open(audio_file_path, 'rb') as audio_file:
+            response = openai.Audio.transcribe(
+                model="whisper-1",
+                file=audio_file,
+                response_format='verbose_json'
+            )
+            logging.info(f"API response: {response}")
+            return response.get('segments', [])
     except Exception as e:
-        logging.error("Error during subtitle extraction: %s", e)
+        logging.error(f"Error during transcription: {e}")
         logging.error("Stack trace: %s", traceback.format_exc())
-        raise
+        return []
 
-def save_subtitles(subtitles, video_name):
-    logging.info("Saving subtitles for video: %s", video_name)
-    for country, subtitle_content in subtitles.items():
-        folder_name = f"sub/{country}"
-        file_name = f"{video_name}_{country}.srt"
-        destination_blob_name = f"{folder_name}/{file_name}"
-        
-        try:
-            bucket = storage_client.bucket(output_bucket_name)
-            blob = bucket.blob(destination_blob_name)
-            blob.upload_from_string(subtitle_content)
-            logging.info("Saved subtitle for %s at %s", country, destination_blob_name)
-        except Exception as e:
-            logging.error("Error saving subtitle for %s: %s", country, e)
-            logging.error("Stack trace: %s", traceback.format_exc())
-            raise
+def format_to_srt(segments):
+    subtitles = []
+    for i, segment in enumerate(segments, start=1):
+        start_time = convert_time(segment['start'])
+        end_time = convert_time(segment['end'])
+        text = segment['text'].strip()
+        subtitles.append(f"{i}\n{start_time} --> {end_time}\n{text}")
+    return "\n\n".join(subtitles)
 
-# Start the Flask app
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
+def convert_time(seconds):
+    ms = int((seconds % 1) * 1000)
+    s = int(seconds)
+    hrs = s // 3600
+    mins = (s % 3600) // 60
+    secs = s % 60
+    return f"{hrs:02}:{mins:02}:{secs:02},{ms:03}"
+
+def extract_subtitles(video_url):
+    logging.info("Attempting to extract subtitles from URL: %s", video_url)
+    audio_file_path = download_audio_from_video(video_url, "/tmp/downloaded_audio.wav")
+    if not audio_file_path:
+        raise Exception("Failed to download audio file.")
+
+    segments = transcribe_audio_with_whisper(audio_file_path)
+    logging.info(f"Segments: {segments}")
+
+    if not segments:
+        raise Exception("No subtitles generated.")
+
+    subtitles = format_to_srt(segments)
+    logging.info("Subtitles extraction succeeded.")
+    return subtitles
