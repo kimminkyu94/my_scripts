@@ -5,3 +5,4 @@ requests
 python-dotenv
 openai==0.28.0
 git+https://github.com/openai/whisper.git
+google-cloud-storage
