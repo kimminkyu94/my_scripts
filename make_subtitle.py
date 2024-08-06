@@ -23,7 +23,7 @@ class VideoUrl(BaseModel):
 def process_video(video: VideoUrl):
     try:
         subtitles = extract_subtitles(video.videoUrl)
-        save_to_cloud_storage(video.videoUrl, subtitles)
+        save_to_cloud_storage(video.videoUrl, subtitles, script='make_subtitle.py')
         return {"subtitles": subtitles}
     except Exception as e:
         logging.error(f"Error in processing: {e}")
@@ -34,11 +34,11 @@ def validate_video_url(video_url):
     try:
         response = requests.head(video_url)
         content_type = response.headers.get('Content-Type', '')
-        if 'video' in content_type:
-            logging.info("Valid video content type: %s", content_type)
+        if 'video' in content type:
+            logging.info("Valid video content type: %s", content type)
             return True
         else:
-            logging.error("Invalid content type: %s", content_type)
+            logging.error("Invalid content type: %s", content type)
             return False
     except requests.RequestException as e:
         logging.error("Error accessing the URL: %s", e)
@@ -54,15 +54,15 @@ def download_audio_from_video(video_url, filename):
         logging.info("Downloaded file saved to: %s", filename)
         return filename
     else:
-        logging.error("Failed to download video/audio. Status code: %s", response.status_code)
+        logging.error("Failed to download video/audio. Status code: %s", response.status code)
         return None
 
-def transcribe_audio_with_whisper(audio_file_path):
+def transcribe_audio_with_whisper(audio file_path):
     try:
-        with open(audio_file_path, 'rb') as audio_file:
+        with open(audio file_path, 'rb') as audio file:
             response = openai.Audio.transcribe(
                 model="whisper-1",
-                file=audio_file,
+                file=audio file,
                 response_format='verbose_json',
                 language='ko'  # Specify Korean language for better accuracy
             )
@@ -76,7 +76,6 @@ def transcribe_audio_with_whisper(audio_file_path):
         logging.error(f"Error during transcription: {e}")
         logging.error("Stack trace: %s", traceback.format_exc())
         return []
-
 
 def format_to_srt(segments):
     subtitles = []
@@ -101,11 +100,11 @@ def convert_time(seconds):
 
 def extract_subtitles(video_url):
     logging.info("Attempting to extract subtitles from URL: %s", video_url)
-    audio_file_path = download_audio_from_video(video_url, "/tmp/downloaded_audio.wav")
-    if not audio_file_path:
+    audio file_path = download_audio_from_video(video_url, "/tmp/downloaded_audio.wav")
+    if not audio file_path:
         raise Exception("Failed to download audio file.")
 
-    segments = transcribe_audio_with_whisper(audio_file_path)
+    segments = transcribe_audio_with_whisper(audio file_path)
     logging.info(f"Segments: {segments}")
 
     if not segments:
@@ -116,7 +115,7 @@ def extract_subtitles(video_url):
     return subtitles
 
 def save_to_cloud_storage(video_url, subtitles, script):
-    logging.info("Attempting to save subtitles to Cloud Storage using script %s", script)
+    logging.info(f"Attempting to save subtitles to Cloud Storage using script {script}")
     try:
         storage_client = storage.Client()
         bucket = storage_client.bucket('allcloudstorage2')
