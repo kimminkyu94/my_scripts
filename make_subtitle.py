@@ -34,7 +34,7 @@ def validate_video_url(video_url):
     try:
         response = requests.head(video_url)
         content_type = response.headers.get('Content-Type', '')
-        if 'video' in content type:
+        if 'video' in content_type:
             logging.info("Valid video content type: %s", content_type)
             return True
         else:
