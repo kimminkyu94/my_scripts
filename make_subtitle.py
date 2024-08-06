@@ -118,14 +118,20 @@ def extract_subtitles(video_url):
     return subtitles
 
 def save_to_cloud_storage(video_url, subtitles, script):
-    logging.info(f"Attempting to save subtitles to Cloud Storage using script {script}")
+    logging.info(f"Attempting to save subtitles to Cloud Storage")
     try:
         storage_client = storage.Client()
         bucket = storage_client.bucket('allcloudstorage2')
-        blob = bucket.blob(f"{script}/{os.path.basename(video_url)}.srt")
+        blob = bucket.blob(f"{os.path.basename(video_url)}.srt")
         logging.debug(f"Blob path: {blob.name}")
         logging.debug(f"Subtitles before saving: {subtitles}")
-        blob.upload_from_string(subtitles.encode('utf-8'), content_type="text/plain; charset=utf-8")
+        
+        # UTF-8로 디코딩한 후 다시 인코딩
+        decoded_subtitles = subtitles.encode('latin1').decode('utf-8')
+        
+        logging.debug(f"Subtitles after decoding: {decoded_subtitles[:100]}")  # 처음 100자만 로깅
+        
+        blob.upload_from_string(decoded_subtitles, content_type="text/plain; charset=utf-8")
         logging.info(f"Subtitles saved to Cloud Storage: {blob.name}")
     except Exception as e:
         logging.error(f"Error saving subtitles to Cloud Storage: {e}")
