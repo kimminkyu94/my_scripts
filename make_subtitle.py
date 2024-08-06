@@ -34,7 +34,7 @@ def validate_video_url(video_url):
     try:
         response = requests.head(video_url)
         content_type = response.headers.get('Content-Type', '')
-        if 'video' in content_type:
+        if 'video' in content type:
             logging.info("Valid video content type: %s", content_type)
             return True
         else:
@@ -70,7 +70,11 @@ def transcribe_audio_with_whisper(audio_file_path):
             # Decode the text from Unicode-escaped format to UTF-8
             segments = response.get('segments', [])
             for segment in segments:
-                segment['text'] = bytes(segment['text'], 'utf-8').decode('unicode_escape')
+                original_text = segment['text']
+                decoded_text = bytes(original_text, 'utf-8').decode('unicode_escape')
+                segment['text'] = decoded_text
+                logging.info(f"Original text: {original_text}")
+                logging.info(f"Decoded text: {decoded_text}")
             return segments
     except Exception as e:
         logging.error(f"Error during transcription: {e}")
