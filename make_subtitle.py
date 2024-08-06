@@ -64,14 +64,13 @@ def transcribe_audio_with_whisper(audio_file_path):
                 model="whisper-1",
                 file=audio_file,
                 response_format='verbose_json',
-                language='ko'  # Specify Korean language for better accuracy
+                language='ko'
             )
             logging.info(f"API response: {response}")
-            # Decode the text from Unicode-escaped format to UTF-8
             segments = response.get('segments', [])
             for segment in segments:
                 original_text = segment['text']
-                decoded_text = bytes(original_text, 'utf-8').decode('unicode_escape')
+                decoded_text = original_text.encode('utf-8').decode('unicode_escape')
                 segment['text'] = decoded_text
                 logging.info(f"Original text: {original_text}")
                 logging.info(f"Decoded text: {decoded_text}")
@@ -125,8 +124,8 @@ def save_to_cloud_storage(video_url, subtitles, script):
         bucket = storage_client.bucket('allcloudstorage2')
         blob = bucket.blob(f"{script}/{os.path.basename(video_url)}.srt")
         logging.debug(f"Blob path: {blob.name}")
-        logging.debug(f"Subtitles before saving: {subtitles}")  # 자막 내용을 디버깅 로그에 출력
-        blob.upload_from_string(subtitles.encode('utf-8'), content_type="text/plain; charset=utf-8")  # Ensure UTF-8 encoding
+        logging.debug(f"Subtitles before saving: {subtitles}")
+        blob.upload_from_string(subtitles.encode('utf-8'), content_type="text/plain; charset=utf-8")
         logging.info(f"Subtitles saved to Cloud Storage: {blob.name}")
     except Exception as e:
         logging.error(f"Error saving subtitles to Cloud Storage: {e}")
