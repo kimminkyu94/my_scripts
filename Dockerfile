@@ -1,130 +1,33 @@
-import os
-import openai
-import logging
-import requests
-import traceback
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from google.cloud import storage
+# Use the official Python image from the Docker Hub
+FROM python:3.9-slim
 
-app = FastAPI()
+# Set the working directory
+WORKDIR /app
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Install git, ffmpeg, and locales in a single RUN statement
+RUN apt-get update && \
+    apt-get install -y git ffmpeg locales && \
+    locale-gen ko_KR.UTF-8 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-# Set OpenAI API key from environment variable
-openai.api_key = os.getenv('OPENAI_API_KEY')
-logging.info(f"OpenAI API Key Loaded: {bool(openai.api_key)}")
+# Set UTF-8 locale for Korean
+ENV LANG ko_KR.UTF-8
+ENV LANGUAGE ko_KR:ko
+ENV LC_ALL ko_KR.UTF-8
 
-class VideoUrl(BaseModel):
-    videoUrl: str
+# Install the required Python packages
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-@app.post("/process")
-def process_video(video: VideoUrl):
-    try:
-        subtitles = extract_subtitles(video.videoUrl)
-        save_to_cloud_storage(video.videoUrl, subtitles, script='make_subtitle.py')
-        return {"subtitles": subtitles}
-    except Exception as e:
-        logging.error(f"Error in processing: {e}")
-        raise HTTPException(status_code=500, detail="Error processing video")
+# Copy the current directory contents into the container
+COPY . .
 
-def validate_video_url(video_url):
-    logging.info("Validating video URL: %s", video_url)
-    try:
-        response = requests.head(video_url)
-        content_type = response.headers.get('Content-Type', '')
-        if 'video' in content type:
-            logging.info("Valid video content type: %s", content type)
-            return True
-        else:
-            logging.error("Invalid content type: %s", content type)
-            return False
-    except requests.RequestException as e:
-        logging.error("Error accessing the URL: %s", e)
-        return False
+# Make port 8080 available to the world outside this container
+EXPOSE 8080
 
-def download_audio_from_video(video_url, filename):
-    logging.info("Downloading audio file from: %s", video_url)
-    response = requests.get(video_url, stream=True)
-    if response.status_code == 200:
-        with open(filename, 'wb') as f:
-            for chunk in response.iter_content(1024):
-                f.write(chunk)
-        logging.info("Downloaded file saved to: %s", filename)
-        return filename
-    else:
-        logging.error("Failed to download video/audio. Status code: %s", response.status code)
-        return None
+# Define environment variable
+ENV PORT 8080
 
-def transcribe_audio_with_whisper(audio file_path):
-    try:
-        with open(audio file_path, 'rb') as audio file:
-            response = openai.Audio.transcribe(
-                model="whisper-1",
-                file=audio file,
-                response_format='verbose_json',
-                language='ko'  # Specify Korean language for better accuracy
-            )
-            logging.info(f"API response: {response}")
-            # Decode the text from Unicode-escaped format to UTF-8
-            segments = response.get('segments', [])
-            for segment in segments:
-                segment['text'] = bytes(segment['text'], 'utf-8').decode('unicode_escape')
-            return segments
-    except Exception as e:
-        logging.error(f"Error during transcription: {e}")
-        logging.error("Stack trace: %s", traceback.format_exc())
-        return []
-
-def format_to_srt(segments):
-    subtitles = []
-    subtitle_index = 1
-    for segment in segments:
-        start_time = segment['start']
-        end_time = segment['end']
-        text = segment['text'].strip()
-        
-        subtitles.append(f"{subtitle_index}\n{convert_time(start_time)} --> {convert_time(end_time)}\n{text}")
-        subtitle_index += 1
-    
-    return "\n\n".join(subtitles)
-
-def convert_time(seconds):
-    ms = int((seconds % 1) * 1000)
-    s = int(seconds)
-    hrs = s // 3600
-    mins = (s % 3600) // 60
-    secs = s % 60
-    return f"{hrs:02}:{mins:02}:{secs:02},{ms:03}"
-
-def extract_subtitles(video_url):
-    logging.info("Attempting to extract subtitles from URL: %s", video_url)
-    audio file_path = download_audio_from_video(video_url, "/tmp/downloaded_audio.wav")
-    if not audio file_path:
-        raise Exception("Failed to download audio file.")
-
-    segments = transcribe_audio_with_whisper(audio file_path)
-    logging.info(f"Segments: {segments}")
-
-    if not segments:
-        raise Exception("No subtitles generated.")
-
-    subtitles = format_to_srt(segments)
-    logging.info("Subtitles extraction succeeded.")
-    return subtitles
-
-def save_to_cloud_storage(video_url, subtitles, script):
-    logging.info(f"Attempting to save subtitles to Cloud Storage using script {script}")
-    try:
-        storage_client = storage.Client()
-        bucket = storage_client.bucket('allcloudstorage2')
-        blob = bucket.blob(f"{script}/{os.path.basename(video_url)}.srt")
-        logging.debug(f"Blob path: {blob.name}")
-        logging.debug(f"Subtitles before saving: {subtitles}")  # 자막 내용을 디버깅 로그에 출력
-        blob.upload_from_string(subtitles.encode('utf-8'), content_type="text/plain; charset=utf-8")  # Ensure UTF-8 encoding
-        logging.info(f"Subtitles saved to Cloud Storage: {blob.name}")
-    except Exception as e:
-        logging.error(f"Error saving subtitles to Cloud Storage: {e}")
-        logging.error("Stack trace: %s", traceback.format_exc())
-        raise
+# Run make_subtitle.py when the container launches
+CMD ["uvicorn", "make_subtitle:app", "--host", "0.0.0.0", "--port", "8080"]
