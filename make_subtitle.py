@@ -67,11 +67,16 @@ def transcribe_audio_with_whisper(audio_file_path):
                 language='ko'  # Specify Korean language for better accuracy
             )
             logging.info(f"API response: {response}")
-            return response.get('segments', [])
+            # Decode the text from Unicode-escaped format to UTF-8
+            segments = response.get('segments', [])
+            for segment in segments:
+                segment['text'] = bytes(segment['text'], 'utf-8').decode('unicode_escape')
+            return segments
     except Exception as e:
         logging.error(f"Error during transcription: {e}")
         logging.error("Stack trace: %s", traceback.format_exc())
         return []
+
 
 def format_to_srt(segments):
     subtitles = []
