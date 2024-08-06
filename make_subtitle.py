@@ -34,11 +34,11 @@ def validate_video_url(video_url):
     try:
         response = requests.head(video_url)
         content_type = response.headers.get('Content-Type', '')
-        if 'video' in content type:
-            logging.info("Valid video content type: %s", content type)
+        if 'video' in content_type:
+            logging.info("Valid video content type: %s", content_type)
             return True
         else:
-            logging.error("Invalid content type: %s", content type)
+            logging.error("Invalid content type: %s", content_type)
             return False
     except requests.RequestException as e:
         logging.error("Error accessing the URL: %s", e)
@@ -54,15 +54,15 @@ def download_audio_from_video(video_url, filename):
         logging.info("Downloaded file saved to: %s", filename)
         return filename
     else:
-        logging.error("Failed to download video/audio. Status code: %s", response.status code)
+        logging.error("Failed to download video/audio. Status code: %s", response.status_code)
         return None
 
-def transcribe_audio_with_whisper(audio file_path):
+def transcribe_audio_with_whisper(audio_file_path):
     try:
-        with open(audio file_path, 'rb') as audio file:
+        with open(audio_file_path, 'rb') as audio_file:
             response = openai.Audio.transcribe(
                 model="whisper-1",
-                file=audio file,
+                file=audio_file,
                 response_format='verbose_json',
                 language='ko'  # Specify Korean language for better accuracy
             )
@@ -100,11 +100,11 @@ def convert_time(seconds):
 
 def extract_subtitles(video_url):
     logging.info("Attempting to extract subtitles from URL: %s", video_url)
-    audio file_path = download_audio_from_video(video_url, "/tmp/downloaded_audio.wav")
-    if not audio file_path:
+    audio_file_path = download_audio_from_video(video_url, "/tmp/downloaded_audio.wav")
+    if not audio_file_path:
         raise Exception("Failed to download audio file.")
 
-    segments = transcribe_audio_with_whisper(audio file_path)
+    segments = transcribe_audio_with_whisper(audio_file_path)
     logging.info(f"Segments: {segments}")
 
     if not segments:
