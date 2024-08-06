@@ -116,7 +116,7 @@ def save_to_cloud_storage(video_url, subtitles):
         storage_client = storage.Client()
         bucket = storage_client.bucket('allcloudstorage2')
         blob = bucket.blob(f"{os.path.basename(video_url)}.srt")
-        blob.upload_from_string(subtitles.encode('utf-8'))  # Ensure UTF-8 encoding
+        blob.upload_from_string(subtitles, content_type="text/plain; charset=utf-8")  # Ensure UTF-8 encoding
         logging.info(f"Subtitles saved to Cloud Storage: {blob.name}")
     except Exception as e:
         logging.error(f"Error saving subtitles to Cloud Storage: {e}")
