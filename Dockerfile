@@ -4,8 +4,14 @@ FROM python:3.9-slim
 # Set the working directory
 WORKDIR /app
 
-# Install git and ffmpeg
-RUN apt-get update && apt-get install -y git ffmpeg
+# Install git, ffmpeg, and locales
+RUN apt-get update && apt-get install -y git ffmpeg locales
+
+# Generate and set UTF-8 locale for Korean
+RUN locale-gen ko_KR.UTF-8
+ENV LANG ko_KR.UTF-8
+ENV LANGUAGE ko_KR:ko
+ENV LC_ALL ko_KR.UTF-8
 
 # Install the required packages
 COPY requirements.txt .
