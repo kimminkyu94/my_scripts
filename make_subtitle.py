@@ -3,11 +3,7 @@ import openai
 import logging
 import requests
 import traceback
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
 from google.cloud import storage
-
-app = FastAPI()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -15,19 +11,6 @@ logging.basicConfig(level=logging.INFO)
 # Set OpenAI API key from environment variable
 openai.api_key = os.getenv('OPENAI_API_KEY')
 logging.info(f"OpenAI API Key Loaded: {bool(openai.api_key)}")
-
-class VideoUrl(BaseModel):
-    videoUrl: str
-
-@app.post("/process")
-def process_video(video: VideoUrl):
-    try:
-        subtitles = extract_subtitles(video.videoUrl)
-        save_to_cloud_storage(video.videoUrl, subtitles, script='make_subtitle.py')
-        return {"subtitles": subtitles}
-    except Exception as e:
-        logging.error(f"Error in processing: {e}")
-        raise HTTPException(status_code=500, detail="Error processing video")
 
 def validate_video_url(video_url):
     logging.info("Validating video URL: %s", video_url)
@@ -117,7 +100,7 @@ def extract_subtitles(video_url):
     logging.info("Subtitles extraction succeeded.")
     return subtitles
 
-def save_to_cloud_storage(video_url, subtitles, script):
+def save_to_cloud_storage(video_url, subtitles):
     logging.info(f"Attempting to save subtitles to Cloud Storage")
     try:
         storage_client = storage.Client()
@@ -137,3 +120,25 @@ def save_to_cloud_storage(video_url, subtitles, script):
         logging.error(f"Error saving subtitles to Cloud Storage: {e}")
         logging.error("Stack trace: %s", traceback.format_exc())
         raise
+
+def main(data):
+    try:
+        video_url = data.get('videoUrl')
+        if not video_url:
+            raise ValueError("Video URL is missing")
+
+        if not validate_video_url(video_url):
+            raise ValueError("Invalid video URL")
+
+        subtitles = extract_subtitles(video_url)
+        save_to_cloud_storage(video_url, subtitles)
+        return {"message": "Subtitles generated and saved successfully", "subtitles": subtitles}
+    except Exception as e:
+        logging.error(f"Error in processing: {e}")
+        return {"error": str(e)}, 500
+
+if __name__ == "__main__":
+    # 테스트를 위한 샘플 데이터
+    test_data = {"videoUrl": "https://example.com/sample_video.mp4"}
+    result = main(test_data)
+    print(result)
