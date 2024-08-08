@@ -50,7 +50,7 @@ def main(data):
             raise
 
         # 번역된 내용을 파싱하여 각 나라별로 저장
-        countries = ['Indonesia', 'Malaysia', 'Vietnam', 'Filipin', 'Japan', 'Thailand', 'Mexico', 'Brazil', 'America']
+        countries = ['Indonesia', 'Malaysia', 'Vietnam', 'Filipin', 'Japan', 'Thailand', 'Mexico', 'Brazil', 'AmericanEnglish']
         output_bucket_name = "allcloudstorage3"
         output_bucket = storage_client.get_bucket(output_bucket_name)
 
@@ -78,7 +78,7 @@ def main(data):
         return {"status": "error", "message": str(e)}, 500
 
 def extract_country_contents(content, countries):
-    country_contents = {}
+    country_contents = {country: "" for country in countries}
     current_country = None
     lines = content.split('\n')
 
@@ -86,7 +86,6 @@ def extract_country_contents(content, countries):
         country_match = next((country for country in countries if line.startswith(f"{country}:")), None)
         if country_match:
             current_country = country_match
-            country_contents[current_country] = ''
         elif current_country:
             country_contents[current_country] += line + '\n'
 
