@@ -8,8 +8,11 @@ from google.cloud import storage
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 
-# 커스텀 GPT API URL
-GPT_API_URL = "https://chatgpt.com/g/g-3YjxJTJ4R-trans-srt"
+# OpenAI API URL
+GPT_API_URL = "https://api.openai.com/v1/completions"
+
+# OpenAI API 키
+OPENAI_API_KEY = 'sk-proj-oMBzy0gMEiyelCq7UaZtT3BlbkFJATMGu6zY4ZdH5u3HtU4n'
 
 def main(data):
     try:
@@ -29,21 +32,32 @@ def main(data):
 
         try:
             logging.info(f"Sending content to GPT API: {GPT_API_URL}")
-            response = requests.post(GPT_API_URL, json={"content": content}, timeout=30)
+            headers = {
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": "text-davinci-003",
+                "prompt": f"Translate the following Korean subtitles into multiple languages:\n\n{content}",
+                "max_tokens": 2048,
+                "temperature": 0.5
+            }
+            response = requests.post(GPT_API_URL, headers=headers, json=data, timeout=30)
             response.raise_for_status()
             logging.info(f"GPT API raw response: {response.text}")
             
-            response_json = response.json()
-            translated_content = response_json.get('processed_content')
-            if not translated_content:
-                logging.error(f"No processed_content in response: {response_json}")
-                raise ValueError('Translated content is empty or missing')
+            try:
+                response_json = response.json()
+                translated_content = response_json.get('choices')[0].get('text')
+                if not translated_content:
+                    logging.error(f"No translated content in response: {response_json}")
+                    raise ValueError('Translated content is empty or missing')
+            except json.JSONDecodeError as e:
+                logging.error(f"Error decoding GPT API response: {e}")
+                logging.error(f"Raw response content: {response.text}")
+                raise
         except requests.exceptions.RequestException as e:
             logging.error(f"Error calling GPT API: {e}")
-            raise
-        except json.JSONDecodeError as e:
-            logging.error(f"Error decoding GPT API response: {e}")
-            logging.error(f"Raw response content: {response.text}")
             raise
         except ValueError as e:
             logging.error(f"Error processing GPT API response: {e}")
@@ -99,3 +113,4 @@ if __name__ == "__main__":
     test_data = {"bucket": "test-bucket", "name": "test-file.srt"}
     result = main(test_data)
     print(result)
+
