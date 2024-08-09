@@ -3,17 +3,42 @@ import requests
 import json
 import os
 from google.cloud import storage
+import traceback
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 
-# 커스텀 GPT API URL
-GPT_API_URL = "https://subtitle-service-22hpg2idaq-uc.a.run.app/translate"
+# 커스텀 GPT API URL (환경 변수에서 가져오거나 기본값 사용)
+GPT_API_URL = os.environ.get('GPT_API_URL', 'https://subtitle-service-22hpg2idaq-uc.a.run.app/translate')
+
+# API 키 (환경 변수에서 가져오기)
+API_KEY = os.environ.get('API_KEY')
+
+def translate_content(content):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {API_KEY}"
+    }
+    data = {
+        "content": content
+    }
+    try:
+        logging.info(f"Sending content to Custom GPT API: {GPT_API_URL}")
+        response = requests.post(GPT_API_URL, headers=headers, json=data, timeout=30)
+        response.raise_for_status()
+        logging.info("Custom GPT API request successful")
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error calling Custom GPT API: {e}")
+        raise
 
 def main(data):
     try:
         bucket_name = data['bucket']
         file_name = data['name']
+
+        if not API_KEY:
+            raise ValueError("API_KEY is not set. Please set the API_KEY environment variable.")
 
         storage_client = storage.Client()
         bucket = storage_client.get_bucket(bucket_name)
@@ -27,29 +52,11 @@ def main(data):
             raise
 
         try:
-            logging.info(f"Sending content to Custom GPT API: {GPT_API_URL}")
-            headers = {
-                "Content-Type": "application/json"
-                # 필요한 경우 인증 헤더 추가
-            }
-            data = {
-                "content": content
-            }
-            response = requests.post(GPT_API_URL, headers=headers, json=data, timeout=30)
-            response.raise_for_status()
-            logging.info(f"Custom GPT API raw response: {response.text}")
-            
-            try:
-                translated_contents = response.json()
-                if not translated_contents:
-                    logging.error(f"No translated content in response: {translated_contents}")
-                    raise ValueError('Translated content is empty or missing')
-            except json.JSONDecodeError as e:
-                logging.error(f"Error decoding Custom GPT API response: {e}")
-                logging.error(f"Raw response content: {response.text}")
-                raise
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Error calling Custom GPT API: {e}")
+            translated_contents = translate_content(content)
+            if not translated_contents:
+                raise ValueError('Translated content is empty or missing')
+        except json.JSONDecodeError as e:
+            logging.error(f"Error decoding Custom GPT API response: {e}")
             raise
         except ValueError as e:
             logging.error(f"Error processing Custom GPT API response: {e}")
@@ -63,7 +70,7 @@ def main(data):
                 try:
                     logging.info(f"Saving translated file for {country} to bucket: {output_bucket_name}")
                     output_blob = output_bucket.blob(f"{country}/{file_name}")
-                    output_blob.upload_from_string("\n".join(content))
+                    output_blob.upload_from_string("\n".join(content) if isinstance(content, list) else content)
                 except Exception as e:
                     logging.error(f"Error saving file for {country}: {e}")
                     raise
