@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 GPT_API_URL = "https://api.openai.com/v1/completions"
 
 # OpenAI API 키
-OPENAI_API_KEY = 'sk-proj-oMBzy0gMEiyelCq7UaZtT3BlbkFJATMGu6zY4ZdH5u3HtU4n'
+OPENAI_API_KEY = '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'
 
 def main(data):
     try:
