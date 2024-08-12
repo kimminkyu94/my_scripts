@@ -86,15 +86,20 @@ def main(data):
         output_bucket = storage_client.get_bucket(output_bucket_name)
 
         for country, content in translated_contents.items():
-            if content:
-                try:
-                    logger.info(f"Saving translated file for {country} to bucket: {output_bucket_name}")
-                    output_blob = output_bucket.blob(f"{country}/{file_name}")
-                    output_blob.upload_from_string("\n".join(content) if isinstance(content, list) else content)
-                    logger.info(f"Successfully saved file for {country}")
-                except Exception as e:
-                    logger.error(f"Error saving file for {country}: {e}")
-                    raise
+    if content:
+        try:
+            logger.info(f"Saving translated file for {country} to bucket: allcloudstorage3")
+            
+            # Convert non-string content to string before saving
+            if isinstance(content, (int, float)):
+                content = str(content)
+            
+            output_blob = output_bucket.blob(f"{country}/{file_name}")
+            output_blob.upload_from_string("\n".join(content) if isinstance(content, list) else content)
+            logger.info(f"Successfully saved file for {country}")
+        except Exception as e:
+            logger.error(f"Error saving file for {country}: {e}")
+            raise
 
         logger.info("Translation and saving process completed successfully")
         return {"status": "success"}
