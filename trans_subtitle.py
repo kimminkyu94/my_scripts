@@ -32,9 +32,9 @@ def translate_content(content):
         "Authorization": f"Bearer {API_KEY}"
     }
     data = {
-        "model": "gpt-4",  # 사용할 모델 이름 또는 ID
+        "model": "gpt-4",
         "messages": [
-            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "system", "content": "You are a translator. Translate the given subtitle into multiple languages: Japanese, Thai, Indonesian, Vietnamese, Filipino, Malaysian, Brazilian Portuguese, Mexican Spanish. Return the results as a JSON object with language codes as keys."},
             {"role": "user", "content": content}
         ]
     }
@@ -69,11 +69,18 @@ def main(data):
 
         try:
             translated_contents = translate_content(content)
-            if not translated_contents:
+            if not translated_contents or 'choices' not in translated_contents:
                 raise ValueError('Translated content is empty or missing')
-            logger.info(f"Translation successful. Results: {list(translated_contents.keys())}")
+            
+            # 실제 번역 결과 추출
+            translation = translated_contents['choices'][0]['message']['content']
+            
+            # JSON 문자열을 파이썬 딕셔너리로 변환
+            translations = json.loads(translation)
+            
+            logger.info(f"Translation successful. Languages: {list(translations.keys())}")
         except json.JSONDecodeError as e:
-            logger.error(f"Error decoding OpenAI GPT API response: {e}")
+            logger.error(f"Error decoding translation result: {e}")
             raise
         except ValueError as e:
             logger.error(f"Error processing OpenAI GPT API response: {e}")
@@ -82,26 +89,14 @@ def main(data):
         output_bucket_name = "allcloudstorage3"
         output_bucket = storage_client.get_bucket(output_bucket_name)
 
-        for key, content in translated_contents.items():
+        for lang, translated_content in translations.items():
             try:
-                logger.info(f"Saving translated file for {key} to bucket: {output_bucket_name}")
-                
-                # 데이터 타입에 따른 처리
-                if isinstance(content, dict):
-                    content = json.dumps(content)
-                elif isinstance(content, list):
-                    content = json.dumps(content)
-                elif isinstance(content, (int, float)):
-                    content = str(content)
-                elif not isinstance(content, str):
-                    content = str(content)
-                
-                output_blob = output_bucket.blob(f"{key}/{file_name}")
-                output_blob.upload_from_string(content)
-                logger.info(f"Successfully saved file for {key}")
+                logger.info(f"Saving translated file for {lang} to bucket: {output_bucket_name}")
+                output_blob = output_bucket.blob(f"{lang}/{file_name}")
+                output_blob.upload_from_string(translated_content)
+                logger.info(f"Successfully saved file for {lang}")
             except Exception as e:
-                logger.error(f"Error saving file for {key}: {e}")
-                # 여기서는 예외를 발생시키지 않고 계속 진행합니다.
+                logger.error(f"Error saving file for {lang}: {e}")
                 continue
 
         logger.info("Translation and saving process completed successfully")
