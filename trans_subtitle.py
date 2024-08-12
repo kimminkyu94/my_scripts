@@ -23,7 +23,8 @@ if not API_KEY:
     raise ValueError("API 키가 설정되지 않았습니다. 환경 변수를 확인해주세요.")
 logger.info(f"API 키 확인: {API_KEY[:5]}...")  # 키의 앞부분만 출력
 
-GPT_API_URL = os.environ.get('GPT_API_URL', 'https://subtitle-service-22hpg2idaq-uc.a.run.app/translate')
+# Update the GPT API URL to OpenAI's chat completions endpoint
+GPT_API_URL = 'https://api.openai.com/v1/chat/completions'
 logger.info(f"GPT API URL: {GPT_API_URL}")
 
 def translate_content(content, skip_confirmation=False):
@@ -32,18 +33,22 @@ def translate_content(content, skip_confirmation=False):
         "Authorization": f"Bearer {API_KEY}"
     }
     data = {
-        "content": content,
-        "skipConfirmation": skip_confirmation  # Pass the skipConfirmation value to the API
+        "model": "gpt-4",  # Use your model name or id if it is a custom model
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": content}
+        ]
     }
     try:
-        logger.info(f"Sending content to Custom GPT API: {GPT_API_URL} with skipConfirmation={skip_confirmation}")
+        logger.info(f"Sending content to OpenAI GPT API: {GPT_API_URL} with skipConfirmation={skip_confirmation}")
         response = requests.post(GPT_API_URL, headers=headers, json=data, timeout=30)
         response.raise_for_status()
-        logger.info("Custom GPT API request successful")
+        logger.info("OpenAI GPT API request successful")
         return response.json()
     except requests.exceptions.RequestException as e:
-        logger.error(f"Error calling Custom GPT API: {e}")
+        logger.error(f"Error calling OpenAI GPT API: {e}")
         raise
+
 
 def main(data):
     try:
