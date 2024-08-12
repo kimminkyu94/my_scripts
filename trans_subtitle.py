@@ -90,12 +90,15 @@ def main(data):
                 try:
                     logger.info(f"Saving translated file for {country} to bucket: allcloudstorage3")
                     
-                    # Convert non-string content to string before saving
-                    if isinstance(content, (int, float)):
+                    # Handle content based on its type
+                    if isinstance(content, list):
+                        # Extract the "text" field from each dictionary in the list
+                        content = "\n".join(item.get("text", "") if isinstance(item, dict) else str(item) for item in content)
+                    elif isinstance(content, (int, float)):
                         content = str(content)
                     
                     output_blob = output_bucket.blob(f"{country}/{file_name}")
-                    output_blob.upload_from_string("\n".join(content) if isinstance(content, list) else content)
+                    output_blob.upload_from_string(content)
                     logger.info(f"Successfully saved file for {country}")
                 except Exception as e:
                     logger.error(f"Error saving file for {country}: {e}")
