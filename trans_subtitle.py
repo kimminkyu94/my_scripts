@@ -40,6 +40,12 @@ def translate_content(content):
         logger.error(f"Error calling OpenAI GPT API: {e}")
         raise
 
+def format_to_srt(subtitles_json):
+    formatted_subtitle = ""
+    for index, (timecode, text) in enumerate(subtitles_json.items(), start=1):
+        formatted_subtitle += f"{index}\n{timecode}\n{text}\n\n"
+    return formatted_subtitle
+
 def main(data):
     try:
         bucket_name = data['bucket']
@@ -59,7 +65,7 @@ def main(data):
             raise ValueError('Translated content is empty or missing')
         
         translations = json.loads(translated_contents['choices'][0]['message']['content'])
-        
+
         logger.info(f"Translation successful. Languages: {list(translations.keys())}")
 
         output_bucket_name = "allcloudstorage3"
@@ -69,8 +75,12 @@ def main(data):
             try:
                 country_folder = next((lang for lang in LANGUAGES if lang in country.lower()), 'other')
                 logger.info(f"Saving translated file for {country} to bucket: {output_bucket_name}/{country_folder}")
+
+                # Convert the dictionary to the SRT format
+                translated_content_srt = format_to_srt(translated_content)
+                
                 output_blob = output_bucket.blob(f"{country_folder}/{file_name}")
-                output_blob.upload_from_string(translated_content)
+                output_blob.upload_from_string(translated_content_srt)
                 logger.info(f"Successfully saved file for {country}")
             except Exception as e:
                 logger.error(f"Error saving file for {country}: {e}")
