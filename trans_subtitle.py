@@ -43,11 +43,12 @@ def parse_gpt_response(response):
     subtitles = re.split(r'[A-Za-z\s]+:', response)[1:]
     return dict(zip(countries, subtitles))
 
-def save_to_storage(bucket_name, country, content):
+def save_to_storage(bucket_name, country, content, file_name):
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(f"{country.lower().strip()}/subtitle.srt")
+    blob = bucket.blob(f"{country}/{file_name}")
     blob.upload_from_string(content.strip(), content_type="text/plain; charset=utf-8")
+    logger.info(f"Saved/Updated subtitle for {country} in {bucket_name}/{country}/{file_name}")
 
 def main(data):
     try:
@@ -80,8 +81,7 @@ def main(data):
             elif country_folder == "mexican spanish":
                 country_folder = "mexico"
             
-            save_to_storage(output_bucket_name, country_folder, subtitle)
-            logger.info(f"Successfully saved file for {country} in folder {country_folder}")
+            save_to_storage(output_bucket_name, country_folder, subtitle, file_name)
 
         logger.info("Translation and saving process completed successfully")
         return {"status": "success"}
