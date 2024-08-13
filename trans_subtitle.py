@@ -16,6 +16,20 @@ logger.info(f"API 키 확인: {API_KEY[:5]}...")
 GPT_API_URL = 'https://api.openai.com/v1/chat/completions'
 logger.info(f"GPT API URL: {GPT_API_URL}")
 
+def map_country_to_folder(country):
+    mapping = {
+        "Brazilian Portuguese": "brazil",
+        "American English": "america",
+        "Japanese": "japan",
+        "Thai": "thailand",
+        "Indonesian": "indonesia",
+        "Vietnamese": "vietnam",
+        "Filipino": "filipin",
+        "Malaysian": "malaysia",
+        "Mexican Spanish": "mexico"
+    }
+    return mapping.get(country, country.lower())
+
 def translate_content(content):
     headers = {
         "Content-Type": "application/json",
@@ -24,7 +38,7 @@ def translate_content(content):
     data = {
         "model": "gpt-3.5-turbo",
         "messages": [
-            {"role": "system", "content": "You are a translator. Translate the given subtitle into Brazilian Portuguese, American English, Japanese, Thai, Indonesian, Vietnamese, Filipino, Malaysian, and Mexican Spanish. Return the results as a text with country names as headers."},
+            {"role": "system", "content": "You are a translator. Translate the given subtitle into Brazilian Portuguese, American English, Japanese, Thai, Indonesian, Vietnamese, Filipino, Malaysian, and Mexican Spanish. Return the results as a text with country names as headers starting with '#'."},
             {"role": "user", "content": content}
         ]
     }
@@ -39,8 +53,8 @@ def translate_content(content):
         raise
 
 def parse_gpt_response(response):
-    countries = re.findall(r'([A-Za-z\s]+):', response)
-    subtitles = re.split(r'[A-Za-z\s]+:', response)[1:]
+    countries = re.findall(r'#\s*(.+)', response)
+    subtitles = re.split(r'#\s*.+\n', response)[1:]
     return dict(zip(countries, subtitles))
 
 def save_to_storage(bucket_name, country, content, file_name):
@@ -48,7 +62,7 @@ def save_to_storage(bucket_name, country, content, file_name):
     bucket = storage_client.bucket(bucket_name)
     blob = bucket.blob(f"{country}/{file_name}")
     blob.upload_from_string(content.strip(), content_type="text/plain; charset=utf-8")
-    logger.info(f"Saved/Updated subtitle for {country} in {bucket_name}/{country}/{file_name}")
+    logger.info(f"Saved subtitle for {country} in {bucket_name}/{country}/{file_name}")
 
 def main(data):
     try:
@@ -73,15 +87,8 @@ def main(data):
         output_bucket_name = "allcloudstorage3"
 
         for country, subtitle in translations.items():
-            country_folder = country.lower().strip()
-            if country_folder == "american english":
-                country_folder = "america"
-            elif country_folder == "brazilian portuguese":
-                country_folder = "brazil"
-            elif country_folder == "mexican spanish":
-                country_folder = "mexico"
-            
-            save_to_storage(output_bucket_name, country_folder, subtitle, file_name)
+            folder_name = map_country_to_folder(country)
+            save_to_storage(output_bucket_name, folder_name, subtitle, file_name)
 
         logger.info("Translation and saving process completed successfully")
         return {"status": "success"}
