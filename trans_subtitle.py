@@ -43,6 +43,8 @@ def translate_content(content):
 def format_to_srt(subtitles_json):
     formatted_subtitle = ""
     for index, (timecode, text) in enumerate(subtitles_json.items(), start=1):
+        # Log each subtitle block for debugging
+        logger.info(f"Formatting subtitle block {index}: Timecode={timecode}, Text={text}")
         formatted_subtitle += f"{index}\n{timecode}\n{text}\n\n"
     return formatted_subtitle
 
@@ -64,7 +66,16 @@ def main(data):
         if not translated_contents or 'choices' not in translated_contents:
             raise ValueError('Translated content is empty or missing')
         
-        translations = json.loads(translated_contents['choices'][0]['message']['content'])
+        # Log the raw content from GPT API response
+        raw_translated_content = translated_contents['choices'][0]['message']['content']
+        logger.info(f"Raw translated content: {raw_translated_content}")
+
+        try:
+            translations = json.loads(raw_translated_content)
+            logger.info(f"Successfully parsed JSON content.")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode JSON content: {e}")
+            raise ValueError('Decoded content is not valid JSON format.')
 
         logger.info(f"Translation successful. Languages: {list(translations.keys())}")
 
@@ -97,3 +108,4 @@ if __name__ == "__main__":
     test_data = {"bucket": "test-bucket", "name": "test-file.srt"}
     result = main(test_data)
     print(result)
+
