@@ -10,16 +10,18 @@ logging.basicConfig(level=logging.INFO)
 async def run_script(script_name: str, request: Request):
     logging.info(f"Received request for script: {script_name}")
     try:
-        # 동적으로 스크립트 모듈 import
+        # Add detailed logging before import
+        logging.info(f"Attempting to import module: {script_name}")
         module = importlib.import_module(script_name)
         logging.info(f"Successfully imported module: {script_name}")
-        # 모듈에서 main 함수 실행
+
+        # Execute the main function in the module
         data = await request.json()
         result = module.main(data)
         logging.info(f"Execution result: {result}")
         return {"result": result}
-    except ImportError:
-        logging.error(f"Script {script_name} not found")
+    except ImportError as e:
+        logging.error(f"ImportError: {e}")
         raise HTTPException(status_code=404, detail=f"Script {script_name} not found")
     except Exception as e:
         logging.error(f"Error executing script {script_name}: {str(e)}")
