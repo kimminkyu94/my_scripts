@@ -89,25 +89,28 @@ def process_video(data):
     with tempfile.TemporaryDirectory() as tmpdir:
         backgrounds = ['background1.png', 'background2.png', 'background3.png']
         
-        title_file = os.path.join(tmpdir, f'{country}_title.png')
+        title_file = os.path.join(tmpdir, f'{country}_title.txt')
         video_file = os.path.join(tmpdir, f'{country}.mp4')
         subtitle_file = os.path.join(tmpdir, f'{country}.srt')
 
-        # Adjust paths based on the actual folder structure in GCS
-        title_blob_name = f'text/{country}/{country}_title.png'
+        # 수정된 부분: 타이틀 파일 경로 변경
+        title_blob_name = f'text/{country}/{country}_title.txt'
         subtitle_blob_name = f'{country}/{file_name}'
         video_blob_name = 'videos/original_video.mp4'
 
         logging.info(f"Downloading title file: {title_blob_name}")
         if not download_from_gcs(BUCKET_TITLE, title_blob_name, title_file):
+            logging.error(f"Failed to download title file for {country}")
             return f"Failed to download title file for {country}"
         
         logging.info(f"Downloading video file: {video_blob_name}")
         if not download_from_gcs(BUCKET_VIDEO, video_blob_name, video_file):
+            logging.error(f"Failed to download video file for {country}")
             return f"Failed to download video file for {country}"
         
         logging.info(f"Downloading subtitle file: {subtitle_blob_name}")
         if not download_from_gcs(BUCKET_SUBTITLE, subtitle_blob_name, subtitle_file):
+            logging.error(f"Failed to download subtitle file for {country}")
             return f"Failed to download subtitle file for {country}"
         
         # Read title and subtitle text
