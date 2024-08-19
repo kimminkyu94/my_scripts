@@ -108,10 +108,13 @@ def process_video(data):
     logging.info(f"Completed processing videos for {country}")
     return f"Processed videos for {country}"
 
+def main(data):
+    return process_video(data)
+
 if __name__ == "__main__":
     # 로컬 테스트용 코드
     test_data = {
         'name': 'test.srt'
     }
-    result = process_video(test_data)
+    result = main(test_data)
     print(result)
