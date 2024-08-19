@@ -18,16 +18,29 @@ BUCKET_VIDEO = 'allcloudvideo'
 BUCKET_OUTPUT = 'allcloudstorage4'
 
 def download_from_gcs(bucket_name, blob_name, destination_file_name):
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(blob_name)
-    blob.download_to_filename(destination_file_name)
-    logging.info(f"Downloaded {blob_name} from {bucket_name}")
+    logging.info(f"Attempting to download {blob_name} from bucket {bucket_name}")
+    try:
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+        if not blob.exists():
+            logging.error(f"File {blob_name} does not exist in bucket {bucket_name}")
+            return False
+        blob.download_to_filename(destination_file_name)
+        logging.info(f"Successfully downloaded {blob_name} from {bucket_name}")
+        return True
+    except Exception as e:
+        logging.error(f"Error downloading {blob_name} from {bucket_name}: {e}")
+        return False
 
 def upload_to_gcs(bucket_name, source_file_name, destination_blob_name):
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(destination_blob_name)
-    blob.upload_from_filename(source_file_name)
-    logging.info(f"Uploaded {source_file_name} to {bucket_name}/{destination_blob_name}")
+    logging.info(f"Attempting to upload {source_file_name} to bucket {bucket_name} as {destination_blob_name}")
+    try:
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(destination_blob_name)
+        blob.upload_from_filename(source_file_name)
+        logging.info(f"Successfully uploaded {source_file_name} to {bucket_name}/{destination_blob_name}")
+    except Exception as e:
+        logging.error(f"Error uploading {source_file_name} to {bucket_name}/{destination_blob_name}: {e}")
 
 def create_shorts_video(background, title, video, subtitle, output, title_text, subtitle_text):
     try:
@@ -78,32 +91,59 @@ def process_video(data):
         title_file = os.path.join(tmpdir, f'{country}_title.png')
         video_file = os.path.join(tmpdir, f'{country}.mp4')
         subtitle_file = os.path.join(tmpdir, f'{country}.srt')
+
+        # Adjust paths based on the actual folder structure in GCS
+        title_blob_name = f'text/{country}/{country}_title.png'
+        subtitle_blob_name = f'{country}/{file_name}'
+        video_blob_name = 'videos/original_video.mp4'
+
+        # Download necessary files
+        if not download_from_gcs(BUCKET_TITLE, title_blob_name, title_file):
+            return f"Failed to download title file for {country}"
+        if not download_from_gcs(BUCKET_VIDEO, video_blob_name, video_file):
+            return f"Failed to download video file for {country}"
+        if not download_from_gcs(BUCKET_SUBTITLE, subtitle_blob_name, subtitle_file):
+            return f"Failed to download subtitle file for {country}"
         
-        # 필요한 파일 다운로드
-        download_from_gcs(BUCKET_TITLE, f'text/{country}/{country}_title.png', title_file)
-        download_from_gcs(BUCKET_VIDEO, 'videos/original_video.mp4', video_file)
-        download_from_gcs(BUCKET_SUBTITLE, f'{country}/{file_name}', subtitle_file)
-        
-        # 제목과 자막 텍스트 읽기
-        with open(title_file, 'r', encoding='utf-8') as f:
-            title_text = f.read().strip()
-        
-        with open(subtitle_file, 'r', encoding='utf-8') as f:
-            subtitle_lines = f.readlines()[2:]  # SRT 형식에서 첫 두 줄 건너뛰기
-            subtitle_text = ' '.join([line.strip() for line in subtitle_lines if line.strip()])
+        # Read title and subtitle text
+        try:
+            with open(title_file, 'r', encoding='utf-8') as f:
+                title_text = f.read().strip()
+            logging.info(f"Title text for {country}: {title_text}")
+        except Exception as e:
+            logging.error(f"Error reading title file {title_file}: {e}")
+            return f"Error reading title file for {country}"
+
+        try:
+            with open(subtitle_file, 'r', encoding='utf-8') as f:
+                subtitle_lines = f.readlines()[2:]  # SRT format, skipping first two lines
+                subtitle_text = ' '.join([line.strip() for line in subtitle_lines if line.strip()])
+            logging.info(f"Subtitle text for {country}: {subtitle_text}")
+        except Exception as e:
+            logging.error(f"Error reading subtitle file {subtitle_file}: {e}")
+            return f"Error reading subtitle file for {country}"
         
         for bg in backgrounds:
             background_file = os.path.join(tmpdir, bg)
             output_file = os.path.join(tmpdir, f'{country}_{bg.split(".")[0]}_shorts.mp4')
             
-            download_from_gcs(BUCKET_BACKGROUND, bg, background_file)
+            if not download_from_gcs(BUCKET_BACKGROUND, bg, background_file):
+                logging.error(f"Failed to download background {bg} for {country}")
+                continue
             
-            # 숏츠 비디오 생성
-            create_shorts_video(background_file, title_file, video_file, subtitle_file, 
-                                output_file, title_text, subtitle_text)
+            # Create shorts video
+            try:
+                create_shorts_video(background_file, title_file, video_file, subtitle_file, 
+                                    output_file, title_text, subtitle_text)
+            except Exception as e:
+                logging.error(f"Error creating video for {country} with background {bg}: {e}")
+                continue
             
-            # 결과물 업로드 (나라별로 저장)
-            upload_to_gcs(BUCKET_OUTPUT, output_file, f'{country}/{bg.split(".")[0]}_shorts.mp4')
+            # Upload result
+            try:
+                upload_to_gcs(BUCKET_OUTPUT, output_file, f'{country}/{bg.split(".")[0]}_shorts.mp4')
+            except Exception as e:
+                logging.error(f"Error uploading video for {country} with background {bg}: {e}")
         
     logging.info(f"Completed processing videos for {country}")
     return f"Processed videos for {country}"
@@ -112,9 +152,10 @@ def main(data):
     return process_video(data)
 
 if __name__ == "__main__":
-    # 로컬 테스트용 코드
+    # Local testing code
     test_data = {
         'name': 'test.srt'
     }
     result = main(test_data)
     print(result)
+
