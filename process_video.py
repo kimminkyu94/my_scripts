@@ -93,36 +93,34 @@ def process_video(data):
         video_file = os.path.join(tmpdir, f'{country}.mp4')
         subtitle_file = os.path.join(tmpdir, f'{country}.srt')
 
-        # 수정된 부분: 타이틀 파일 경로 변경
+        # Updated title file path
         title_blob_name = f'text/{country}/{country}_title.txt'
         subtitle_blob_name = f'{country}/{file_name}'
         video_blob_name = 'videos/original_video.mp4'
 
         logging.info(f"Downloading title file: {title_blob_name}")
         if not download_from_gcs(BUCKET_TITLE, title_blob_name, title_file):
-            logging.error(f"Failed to download title file for {country}")
-            return f"Failed to download title file for {country}"
-        
+            logging.warning(f"Failed to download title file for {country}. Using default title.")
+            title_text = f"Video for {country}"  # Use default title if title file is missing
+        else:
+            try:
+                with open(title_file, 'r', encoding='utf-8') as f:
+                    title_text = f.read().strip()
+                logging.info(f"Title text for {country}: {title_text}")
+            except Exception as e:
+                logging.error(f"Error reading title file {title_file}: {e}")
+                return f"Error reading title file for {country}"
+
         logging.info(f"Downloading video file: {video_blob_name}")
         if not download_from_gcs(BUCKET_VIDEO, video_blob_name, video_file):
-            logging.error(f"Failed to download video file for {country}")
-            return f"Failed to download video file for {country}"
+            logging.error(f"Failed to download video file from {BUCKET_VIDEO}")
+            return f"Failed to download video file from {BUCKET_VIDEO}"
         
         logging.info(f"Downloading subtitle file: {subtitle_blob_name}")
         if not download_from_gcs(BUCKET_SUBTITLE, subtitle_blob_name, subtitle_file):
             logging.error(f"Failed to download subtitle file for {country}")
             return f"Failed to download subtitle file for {country}"
         
-        # Read title and subtitle text
-        try:
-            logging.info(f"Reading title file: {title_file}")
-            with open(title_file, 'r', encoding='utf-8') as f:
-                title_text = f.read().strip()
-            logging.info(f"Title text for {country}: {title_text}")
-        except Exception as e:
-            logging.error(f"Error reading title file {title_file}: {e}")
-            return f"Error reading title file for {country}"
-
         try:
             logging.info(f"Reading subtitle file: {subtitle_file}")
             with open(subtitle_file, 'r', encoding='utf-8') as f:
@@ -171,3 +169,4 @@ if __name__ == "__main__":
     }
     result = main(test_data)
     print(result)
+
