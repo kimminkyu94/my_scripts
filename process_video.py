@@ -4,13 +4,13 @@ from google.cloud import storage
 import ffmpeg
 import logging
 
-# 로깅 설정
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 
-# Google Cloud Storage 클라이언트 설정
+# Google Cloud Storage client setup
 storage_client = storage.Client()
 
-# 버킷 이름 설정
+# Bucket names
 BUCKET_TITLE = 'allcloudstorage1'
 BUCKET_BACKGROUND = 'allcloudstorage2'
 BUCKET_SUBTITLE = 'allcloudstorage3'
@@ -77,6 +77,7 @@ def create_shorts_video(background, title, video, subtitle, output, title_text, 
         raise
 
 def process_video(data):
+    logging.info(f"Starting process_video function with data: {data}")
     file_name = data.get('name')
     if not file_name or not file_name.endswith('.srt'):
         logging.error(f"Invalid file name: {file_name}")
@@ -97,16 +98,21 @@ def process_video(data):
         subtitle_blob_name = f'{country}/{file_name}'
         video_blob_name = 'videos/original_video.mp4'
 
-        # Download necessary files
+        logging.info(f"Downloading title file: {title_blob_name}")
         if not download_from_gcs(BUCKET_TITLE, title_blob_name, title_file):
             return f"Failed to download title file for {country}"
+        
+        logging.info(f"Downloading video file: {video_blob_name}")
         if not download_from_gcs(BUCKET_VIDEO, video_blob_name, video_file):
             return f"Failed to download video file for {country}"
+        
+        logging.info(f"Downloading subtitle file: {subtitle_blob_name}")
         if not download_from_gcs(BUCKET_SUBTITLE, subtitle_blob_name, subtitle_file):
             return f"Failed to download subtitle file for {country}"
         
         # Read title and subtitle text
         try:
+            logging.info(f"Reading title file: {title_file}")
             with open(title_file, 'r', encoding='utf-8') as f:
                 title_text = f.read().strip()
             logging.info(f"Title text for {country}: {title_text}")
@@ -115,6 +121,7 @@ def process_video(data):
             return f"Error reading title file for {country}"
 
         try:
+            logging.info(f"Reading subtitle file: {subtitle_file}")
             with open(subtitle_file, 'r', encoding='utf-8') as f:
                 subtitle_lines = f.readlines()[2:]  # SRT format, skipping first two lines
                 subtitle_text = ' '.join([line.strip() for line in subtitle_lines if line.strip()])
@@ -127,12 +134,14 @@ def process_video(data):
             background_file = os.path.join(tmpdir, bg)
             output_file = os.path.join(tmpdir, f'{country}_{bg.split(".")[0]}_shorts.mp4')
             
+            logging.info(f"Downloading background file: {bg}")
             if not download_from_gcs(BUCKET_BACKGROUND, bg, background_file):
                 logging.error(f"Failed to download background {bg} for {country}")
                 continue
             
             # Create shorts video
             try:
+                logging.info(f"Creating shorts video for {country} with background {bg}")
                 create_shorts_video(background_file, title_file, video_file, subtitle_file, 
                                     output_file, title_text, subtitle_text)
             except Exception as e:
@@ -141,6 +150,7 @@ def process_video(data):
             
             # Upload result
             try:
+                logging.info(f"Uploading shorts video to GCS: {output_file}")
                 upload_to_gcs(BUCKET_OUTPUT, output_file, f'{country}/{bg.split(".")[0]}_shorts.mp4')
             except Exception as e:
                 logging.error(f"Error uploading video for {country} with background {bg}: {e}")
@@ -158,4 +168,3 @@ if __name__ == "__main__":
     }
     result = main(test_data)
     print(result)
-
