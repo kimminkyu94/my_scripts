@@ -66,22 +66,9 @@ def find_title_file(bucket_name, country):
         logging.error(f"Error searching for title file in {country} directory: {e}")
         return None
 
-def prepare_background_image(background):
-    try:
-        output_video = '/tmp/background_video.mp4'
-        ffmpeg.input(background, loop=1, t=10).output(output_video, vcodec='libx264', pix_fmt='yuv420p').run()
-        logging.info(f"Prepared background video: {output_video}")
-        return output_video
-    except ffmpeg.Error as e:
-        logging.error(f"FFmpeg error in preparing background image: {e.stderr.decode('utf8')}")
-        raise
-
 def create_shorts_video(background, title, video, subtitle, output, title_text, subtitle_text):
     try:
-        # Prepare background video from the static image
-        background_video = prepare_background_image(background)
-        
-        background_input = ffmpeg.input(background_video)
+        background_input = ffmpeg.input(background)
         video_input = (
             ffmpeg.input(video)
             .filter('scale', w=1080, h=775, force_original_aspect_ratio='decrease')
