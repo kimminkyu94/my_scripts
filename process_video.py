@@ -44,29 +44,50 @@ def upload_to_gcs(bucket_name, source_file_name, destination_blob_name):
 
 def find_title_file(bucket_name, country):
     try:
-        # Fetch the list of files in the country's directory
+        # Correct folder path for each country
+        prefix = f'text/{country}/'
         bucket = storage_client.bucket(bucket_name)
-        blobs = bucket.list_blobs(prefix=f'text/{country}/')
+        blobs = list(bucket.list_blobs(prefix=prefix))
+
+        if not blobs:
+            logging.error(f"No title file found in {country} directory with prefix {prefix}.")
+            return None
         
-        # Return the first file found in the directory (assuming there's only one title file)
+        # Find the first .txt file in the directory
         for blob in blobs:
             if blob.name.endswith('.txt'):
+                logging.info(f"Found title file: {blob.name}")
                 return blob.name
-        logging.error(f"No title file found in {country} directory.")
+        
+        logging.error(f"No .txt title file found in {country} directory.")
         return None
+        
     except Exception as e:
         logging.error(f"Error searching for title file in {country} directory: {e}")
         return None
 
+def prepare_background_image(background):
+    try:
+        output_video = '/tmp/background_video.mp4'
+        ffmpeg.input(background, loop=1, t=10).output(output_video, vcodec='libx264', pix_fmt='yuv420p').run()
+        logging.info(f"Prepared background video: {output_video}")
+        return output_video
+    except ffmpeg.Error as e:
+        logging.error(f"FFmpeg error in preparing background image: {e.stderr.decode('utf8')}")
+        raise
+
 def create_shorts_video(background, title, video, subtitle, output, title_text, subtitle_text):
     try:
-        background_input = ffmpeg.input(background)
+        # Prepare background video from the static image
+        background_video = prepare_background_image(background)
+        
+        background_input = ffmpeg.input(background_video)
         video_input = (
             ffmpeg.input(video)
             .filter('scale', w=1080, h=775, force_original_aspect_ratio='decrease')
             .filter('pad', 1080, 775, '(ow-iw)/2', '(oh-ih)/2')
         )
-        # Adjusted to use a solid color with transparency applied through a different method
+        # Title overlay with proper transparency handling
         title_overlay = (
             ffmpeg.input('color=c=black:s=1080x1920', format='lavfi')
             .filter('drawtext', fontfile='/app/fonts/sans-serif-medium.ttf', fontsize=80, fontcolor='white', 
@@ -104,9 +125,7 @@ def process_video(data):
     logging.info(f"Processing video for country: {country}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        backgrounds = ['background1.png', 'background2.png', 'background3.png']
-        
-        title_file = os.path.join(tmpdir, f'{country}_title.txt')
+        title_file_path = os.path.join(tmpdir, f'{country}_title.txt')
         video_file = os.path.join(tmpdir, 'original_video.mp4')
         subtitle_file = os.path.join(tmpdir, f'{country}.srt')
 
@@ -117,16 +136,16 @@ def process_video(data):
 
         if title_blob_name:
             logging.info(f"Downloading title file: {title_blob_name}")
-            if not download_from_gcs(BUCKET_TITLE, title_blob_name, title_file):
+            if not download_from_gcs(BUCKET_TITLE, title_blob_name, title_file_path):
                 logging.warning(f"Failed to download title file for {country}. Using default title.")
                 title_text = f"Video for {country}"
             else:
                 try:
-                    with open(title_file, 'r', encoding='utf-8') as f:
+                    with open(title_file_path, 'r', encoding='utf-8') as f:
                         title_text = f.read().strip()
                     logging.info(f"Title text for {country}: {title_text}")
                 except Exception as e:
-                    logging.error(f"Error reading title file {title_file}: {e}")
+                    logging.error(f"Error reading title file {title_file_path}: {e}")
                     return f"Error reading title file for {country}"
         else:
             logging.warning(f"No title file found for {country}. Using default title.")
@@ -142,6 +161,7 @@ def process_video(data):
             logging.error(f"Failed to download subtitle file for {country}")
             return f"Failed to download subtitle file for {country}"
         
+        # Process the subtitle text
         try:
             logging.info(f"Reading subtitle file: {subtitle_file}")
             with open(subtitle_file, 'r', encoding='utf-8') as f:
@@ -151,6 +171,9 @@ def process_video(data):
         except Exception as e:
             logging.error(f"Error reading subtitle file {subtitle_file}: {e}")
             return f"Error reading subtitle file for {country}"
+        
+        # Process and create the video using the appropriate background and title
+        backgrounds = ['background1.png', 'background2.png', 'background3.png']
         
         for bg in backgrounds:
             background_file = os.path.join(tmpdir, bg)
@@ -163,7 +186,7 @@ def process_video(data):
             
             try:
                 logging.info(f"Creating shorts video for {country} with background {bg}")
-                create_shorts_video(background_file, title_file, video_file, subtitle_file, 
+                create_shorts_video(background_file, title_file_path, video_file, subtitle_file, 
                                     output_file, title_text, subtitle_text)
             except Exception as e:
                 logging.error(f"Error creating video for {country} with background {bg}: {str(e)}")
