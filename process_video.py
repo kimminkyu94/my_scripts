@@ -47,7 +47,8 @@ def upload_to_gcs(bucket_name, source_file_name, destination_blob_name):
 def find_title_file(bucket_name, country):
     logging.debug(f"Searching for title file for country: {country}")
     try:
-        prefix = f'text/{country.lower()}/'
+        country = country.capitalize()
+        prefix = f'text/{country}/'
         bucket = storage_client.bucket(bucket_name)
         blobs = list(bucket.list_blobs(prefix=prefix))
 
@@ -114,7 +115,7 @@ def process_video(data):
         logging.error(f"Invalid file name: {file_name}")
         return f"Invalid file name: {file_name}"
 
-    country = file_name.split('/')[0].replace('_', ' ')
+    country = file_name.split('/')[0].capitalize()
     logging.info(f"Processing video for country: {country}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
