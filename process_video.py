@@ -83,19 +83,19 @@ def process_video(data):
         logging.error(f"Invalid file name: {file_name}")
         return f"Invalid file name: {file_name}"
 
-    country = file_name.split('.')[0]
+    country = file_name.split('/')[0]  # Assuming the file name format is 'country/original_video.mp4.srt'
     logging.info(f"Processing video for country: {country}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         backgrounds = ['background1.png', 'background2.png', 'background3.png']
         
         title_file = os.path.join(tmpdir, f'{country}_title.txt')
-        video_file = os.path.join(tmpdir, f'{country}.mp4')
+        video_file = os.path.join(tmpdir, 'original_video.mp4')
         subtitle_file = os.path.join(tmpdir, f'{country}.srt')
 
         # Updated title file path
         title_blob_name = f'text/{country}/{country}_title.txt'
-        subtitle_blob_name = f'{country}/{file_name}'
+        subtitle_blob_name = file_name
         video_blob_name = 'videos/original_video.mp4'
 
         logging.info(f"Downloading title file: {title_blob_name}")
@@ -165,8 +165,7 @@ def main(data):
 if __name__ == "__main__":
     # Local testing code
     test_data = {
-        'name': 'test.srt'
+        'name': 'test/original_video.mp4.srt'
     }
     result = main(test_data)
     print(result)
-
