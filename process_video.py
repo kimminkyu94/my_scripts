@@ -42,6 +42,22 @@ def upload_to_gcs(bucket_name, source_file_name, destination_blob_name):
     except Exception as e:
         logging.error(f"Error uploading {source_file_name} to {bucket_name}/{destination_blob_name}: {e}")
 
+def find_title_file(bucket_name, country):
+    try:
+        # Fetch the list of files in the country's directory
+        bucket = storage_client.bucket(bucket_name)
+        blobs = bucket.list_blobs(prefix=f'text/{country}/')
+        
+        # Return the first file found in the directory (assuming there's only one title file)
+        for blob in blobs:
+            if blob.name.endswith('.txt'):
+                return blob.name
+        logging.error(f"No title file found in {country} directory.")
+        return None
+    except Exception as e:
+        logging.error(f"Error searching for title file in {country} directory: {e}")
+        return None
+
 def create_shorts_video(background, title, video, subtitle, output, title_text, subtitle_text):
     try:
         background_input = ffmpeg.input(background)
@@ -50,13 +66,14 @@ def create_shorts_video(background, title, video, subtitle, output, title_text, 
             .filter('scale', w=1080, h=775, force_original_aspect_ratio='decrease')
             .filter('pad', 1080, 775, '(ow-iw)/2', '(oh-ih)/2')
         )
+        # Adjusted to use a solid color with transparency applied through a different method
         title_overlay = (
-            ffmpeg.input('color=color=#00000000:s=1080x1920', format='lavfi')
+            ffmpeg.input('color=c=black:s=1080x1920', format='lavfi')
             .filter('drawtext', fontfile='/app/fonts/sans-serif-medium.ttf', fontsize=80, fontcolor='white', 
                     x='(w-tw)/2', y='h/6', text=title_text)
         )
         subtitle_overlay = (
-            ffmpeg.input('color=color=#00000000:s=1080x1920', format='lavfi')
+            ffmpeg.input('color=c=black:s=1080x1920', format='lavfi')
             .filter('drawtext', fontfile='/app/fonts/sans-serif-light.ttf', fontsize=60, fontcolor='white', 
                     x='(w-tw)/2', y='h-th-20', text=subtitle_text)
             .filter('geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', 
@@ -93,22 +110,27 @@ def process_video(data):
         video_file = os.path.join(tmpdir, 'original_video.mp4')
         subtitle_file = os.path.join(tmpdir, f'{country}.srt')
 
-        title_blob_name = f'text/{country}/{country}_title.txt'
+        # Find the correct title file for the country
+        title_blob_name = find_title_file(BUCKET_TITLE, country)
         subtitle_blob_name = file_name
         video_blob_name = 'videos/original_video.mp4'
 
-        logging.info(f"Downloading title file: {title_blob_name}")
-        if not download_from_gcs(BUCKET_TITLE, title_blob_name, title_file):
-            logging.warning(f"Failed to download title file for {country}. Using default title.")
-            title_text = f"Video for {country}"
+        if title_blob_name:
+            logging.info(f"Downloading title file: {title_blob_name}")
+            if not download_from_gcs(BUCKET_TITLE, title_blob_name, title_file):
+                logging.warning(f"Failed to download title file for {country}. Using default title.")
+                title_text = f"Video for {country}"
+            else:
+                try:
+                    with open(title_file, 'r', encoding='utf-8') as f:
+                        title_text = f.read().strip()
+                    logging.info(f"Title text for {country}: {title_text}")
+                except Exception as e:
+                    logging.error(f"Error reading title file {title_file}: {e}")
+                    return f"Error reading title file for {country}"
         else:
-            try:
-                with open(title_file, 'r', encoding='utf-8') as f:
-                    title_text = f.read().strip()
-                logging.info(f"Title text for {country}: {title_text}")
-            except Exception as e:
-                logging.error(f"Error reading title file {title_file}: {e}")
-                return f"Error reading title file for {country}"
+            logging.warning(f"No title file found for {country}. Using default title.")
+            title_text = f"Video for {country}"
 
         logging.info(f"Downloading video file: {video_blob_name}")
         if not download_from_gcs(BUCKET_VIDEO, video_blob_name, video_file):
@@ -161,7 +183,7 @@ def main(data):
 
 if __name__ == "__main__":
     test_data = {
-        'name': 'test/original_video.mp4.srt'
+        'name': 'america/original_video.mp4.srt'
     }
     result = main(test_data)
     print(result)
