@@ -51,12 +51,12 @@ def create_shorts_video(background, title, video, subtitle, output, title_text, 
             .filter('pad', 1080, 775, '(ow-iw)/2', '(oh-ih)/2')
         )
         title_overlay = (
-            ffmpeg.input('color=transparent:s=1080x1920', format='lavfi')
+            ffmpeg.input('color=color=#00000000:s=1080x1920', format='lavfi')
             .filter('drawtext', fontfile='/app/fonts/sans-serif-medium.ttf', fontsize=80, fontcolor='white', 
                     x='(w-tw)/2', y='h/6', text=title_text)
         )
         subtitle_overlay = (
-            ffmpeg.input('color=transparent:s=1080x1920', format='lavfi')
+            ffmpeg.input('color=color=#00000000:s=1080x1920', format='lavfi')
             .filter('drawtext', fontfile='/app/fonts/sans-serif-light.ttf', fontsize=60, fontcolor='white', 
                     x='(w-tw)/2', y='h-th-20', text=subtitle_text)
             .filter('geq', r='r(X,Y)', g='g(X,Y)', b='b(X,Y)', 
@@ -83,7 +83,7 @@ def process_video(data):
         logging.error(f"Invalid file name: {file_name}")
         return f"Invalid file name: {file_name}"
 
-    country = file_name.split('/')[0]  # Assuming the file name format is 'country/original_video.mp4.srt'
+    country = file_name.split('/')[0]
     logging.info(f"Processing video for country: {country}")
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -93,7 +93,6 @@ def process_video(data):
         video_file = os.path.join(tmpdir, 'original_video.mp4')
         subtitle_file = os.path.join(tmpdir, f'{country}.srt')
 
-        # Updated title file path
         title_blob_name = f'text/{country}/{country}_title.txt'
         subtitle_blob_name = file_name
         video_blob_name = 'videos/original_video.mp4'
@@ -101,7 +100,7 @@ def process_video(data):
         logging.info(f"Downloading title file: {title_blob_name}")
         if not download_from_gcs(BUCKET_TITLE, title_blob_name, title_file):
             logging.warning(f"Failed to download title file for {country}. Using default title.")
-            title_text = f"Video for {country}"  # Use default title if title file is missing
+            title_text = f"Video for {country}"
         else:
             try:
                 with open(title_file, 'r', encoding='utf-8') as f:
@@ -140,21 +139,19 @@ def process_video(data):
                 logging.error(f"Failed to download background {bg} for {country}")
                 continue
             
-            # Create shorts video
             try:
                 logging.info(f"Creating shorts video for {country} with background {bg}")
                 create_shorts_video(background_file, title_file, video_file, subtitle_file, 
                                     output_file, title_text, subtitle_text)
             except Exception as e:
-                logging.error(f"Error creating video for {country} with background {bg}: {e}")
+                logging.error(f"Error creating video for {country} with background {bg}: {str(e)}")
                 continue
             
-            # Upload result
             try:
                 logging.info(f"Uploading shorts video to GCS: {output_file}")
                 upload_to_gcs(BUCKET_OUTPUT, output_file, f'{country}/{bg.split(".")[0]}_shorts.mp4')
             except Exception as e:
-                logging.error(f"Error uploading video for {country} with background {bg}: {e}")
+                logging.error(f"Error uploading video for {country} with background {bg}: {str(e)}")
         
     logging.info(f"Completed processing videos for {country}")
     return f"Processed videos for {country}"
@@ -163,7 +160,6 @@ def main(data):
     return process_video(data)
 
 if __name__ == "__main__":
-    # Local testing code
     test_data = {
         'name': 'test/original_video.mp4.srt'
     }
