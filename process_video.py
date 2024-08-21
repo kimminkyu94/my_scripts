@@ -5,24 +5,22 @@ import ffmpeg
 from google.api_core import retry
 
 # 로깅 설정
-logging.basicConfig(level=logging.DEBUG, 
+logging.basicConfig(level=logging.INFO, 
                     format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Google Cloud 클라이언트 설정
 storage_client = storage.Client()
 publisher = pubsub_v1.PublisherClient()
-subscriber = pubsub_v1.SubscriberClient()
 
 # Pub/Sub 및 Storage 설정
-PROJECT_ID = "sublime-sunspot-420109"
+PROJECT_ID = os.environ.get('PROJECT_ID', 'your-project-id')
 TOPIC_NAME = f"projects/{PROJECT_ID}/topics/process_video"
-SUBSCRIPTION_NAME = f"projects/{PROJECT_ID}/subscriptions/process_video-sub"
-BUCKET_TITLE = 'allcloudstorage1'
-BUCKET_BACKGROUND = 'allcloudstorage2'
-BUCKET_SUBTITLE = 'allcloudstorage3'
-BUCKET_VIDEO = 'allcloudvideo'
-BUCKET_OUTPUT = 'allcloudstorage4'
+BUCKET_TITLE = os.environ.get('BUCKET_TITLE', 'allcloudstorage1')
+BUCKET_BACKGROUND = os.environ.get('BUCKET_BACKGROUND', 'allcloudstorage2')
+BUCKET_SUBTITLE = os.environ.get('BUCKET_SUBTITLE', 'allcloudstorage3')
+BUCKET_VIDEO = os.environ.get('BUCKET_VIDEO', 'allcloudvideo')
+BUCKET_OUTPUT = os.environ.get('BUCKET_OUTPUT', 'allcloudstorage4')
 
 @retry.Retry(predicate=retry.if_exception_type(Exception))
 def publish_message(step, data):
@@ -82,6 +80,8 @@ def process_video(data):
     """비디오 처리 메인 함수"""
     try:
         file_name = data.get('name')
+        if not file_name:
+            raise ValueError("No 'name' provided in the data")
         country = file_name.split('/')[0].capitalize()
         
         # URI 생성
@@ -105,40 +105,21 @@ def process_video(data):
             
             if create_shorts_video(background_uri, video_uri, output_uri, title_text, subtitle_uri):
                 logger.info(f"Successfully processed video for {country} with background {bg}")
+                publish_message('video_created', {'country': country, 'background': bg, 'output_uri': output_uri})
             else:
                 logger.error(f"Failed to create shorts video for {country} with background {bg}")
+                publish_message('video_creation_failed', {'country': country, 'background': bg})
 
         return {"status": "success", "message": f"Processed video for {country}"}
     except Exception as e:
         logger.exception(f"Error in process_video: {e}")
+        publish_message('process_video_error', {'error': str(e)})
         return {"status": "error", "message": str(e)}
 
-def handle_pubsub_message(message):
-    """Pub/Sub 메시지 처리 함수"""
-    try:
-        message_data = eval(message.data.decode('utf-8'))
-        step = message_data['step']
-        data = message_data['data']
-        
-        if step == 'process_video':
-            result = process_video(data)
-            logger.info(f"Video processing result: {result}")
-        else:
-            logger.warning(f"Unknown step received: {step}")
-        
-        message.ack()
-    except Exception as e:
-        logger.exception(f"Error handling Pub/Sub message: {e}")
-        message.nack()
-
-def main(event, context):
+def main(data):
     """Cloud Run 진입점"""
     try:
         logger.info("Starting video processing")
-        data = event.get('data')
-        if not data:
-            raise ValueError("No data provided in the event")
-        
         result = process_video(data)
         logger.info(f"Video processing completed with result: {result}")
         return result
@@ -147,27 +128,9 @@ def main(event, context):
         return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
-    logging.info("Starting the application in local mode")
-    test_event = {
-        'data': {
-            'name': 'indonesia/original_video.mp4.srt'
-        }
+    # 로컬 테스트용 코드
+    test_data = {
+        'name': 'indonesia/original_video.mp4.srt'
     }
-    result = main(test_event, None)
+    result = main(test_data)
     print(f"Test result: {result}")
-
-    # Pub/Sub 구독 설정 (로컬 테스트용)
-    with subscriber:
-        subscription_path = subscriber.subscription_path(PROJECT_ID, SUBSCRIPTION_NAME)
-        streaming_pull_future = subscriber.subscribe(subscription_path, callback=handle_pubsub_message)
-        logger.info(f"Listening for messages on {subscription_path}")
-        
-        try:
-            streaming_pull_future.result()
-        except KeyboardInterrupt:
-            streaming_pull_future.cancel()
-            logger.info("Streaming pull future cancelled.")
-        except Exception as e:
-            logger.exception(f"Unexpected error in Pub/Sub listener: {e}")
-
-logger.info("Application terminated")
