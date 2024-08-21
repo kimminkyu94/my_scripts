@@ -1,138 +1,132 @@
 import os
 import tempfile
-import json
-from google.cloud import storage, tasks_v2
+from google.cloud import storage, pubsub_v1
 import ffmpeg
 import logging
 
-# 로깅 설정
+# Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Google Cloud 클라이언트 설정
+# Google Cloud Storage client setup
 storage_client = storage.Client()
-tasks_client = tasks_v2.CloudTasksClient()
 
-# 버킷 이름
+# Google Pub/Sub client setup
+publisher = pubsub_v1.PublisherClient()
+subscriber = pubsub_v1.SubscriberClient()
+
+# Pub/Sub topic and subscription
+TOPIC_NAME = "projects/sublime-sunspot-420109/topics/process_video"
+SUBSCRIPTION_NAME = "projects/sublime-sunspot-420109/subscriptions/process_video-sub"
+
+# Bucket names
 BUCKET_TITLE = 'allcloudstorage1'
 BUCKET_BACKGROUND = 'allcloudstorage2'
 BUCKET_SUBTITLE = 'allcloudstorage3'
 BUCKET_VIDEO = 'allcloudvideo'
 BUCKET_OUTPUT = 'allcloudstorage4'
 
-# Cloud Tasks 큐 설정
-PROJECT_ID = 'sublime-sunspot-420109'
-QUEUE_LOCATION = 'us-central1'
-QUEUE_NAME = 'video-processing-queue'
-QUEUE_PATH = tasks_client.queue_path(PROJECT_ID, QUEUE_LOCATION, QUEUE_NAME)
-
-def download_from_gcs(bucket_name, blob_name, destination_file_name):
-    logging.debug(f"Downloading {blob_name} from {bucket_name}")
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(blob_name)
-    blob.download_to_filename(destination_file_name)
-    logging.info(f"Downloaded {blob_name}")
-    return True
-
-def upload_to_gcs(bucket_name, source_file_name, destination_blob_name):
-    logging.debug(f"Uploading {source_file_name} to {bucket_name}/{destination_blob_name}")
-    bucket = storage_client.bucket(bucket_name)
-    blob = bucket.blob(destination_blob_name)
-    blob.upload_from_filename(source_file_name)
-    logging.info(f"Uploaded {source_file_name}")
-    return True
-
-def find_title_file(bucket_name, country):
-    logging.debug(f"Finding title file for {country}")
-    bucket = storage_client.bucket(bucket_name)
-    blobs = bucket.list_blobs(prefix=f'text/{country}/')
-    for blob in blobs:
-        if blob.name.lower().endswith(('.txt', '.text')):
-            logging.info(f"Found title file: {blob.name}")
-            return blob.name
-    logging.warning(f"No title file found for {country}")
-    return None
-
-def create_shorts_video(background, video, output, title_text, subtitle_text):
+def publish_message(step, data):
+    """Publishes a message to Pub/Sub with step information."""
     try:
-        ffmpeg_cmd = (
-            ffmpeg
-            .input(background)
-            .overlay(ffmpeg.input(video).filter('scale', 1080, -1))
-            .drawtext(fontfile='/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', fontsize=80, text=title_text, x='(w-tw)/2', y='h*0.1')
-            .drawtext(fontfile='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', fontsize=60, text=subtitle_text, x='(w-tw)/2', y='h*0.9')
-            .output(output, vcodec='libx264', preset='ultrafast', crf=23)
-        )
-        ffmpeg_cmd.run(capture_stdout=True, capture_stderr=True)
-        logging.info(f"Created shorts video: {output}")
-        return True
-    except ffmpeg.Error as e:
-        logging.error(f"FFmpeg error: {e.stderr.decode('utf8')}")
-        return False
+        message = {
+            'step': step,
+            'data': data
+        }
+        publisher.publish(TOPIC_NAME, str(message).encode('utf-8'))
+        logging.info(f"Published message for step '{step}' with data: {data}")
+    except Exception as e:
+        logging.exception(f"Error publishing message to Pub/Sub: {e}")
 
-def process_video(data):
-    logging.info(f"Processing video: {data}")
-    country = data['name'].split('/')[0].capitalize()
+def download_files(data):
+    """Step 1: Download the necessary files from GCS."""
+    file_name = data.get('name')
+    country = file_name.split('/')[0].capitalize()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        subtitle_file = os.path.join(tmpdir, f'{country}.srt')
+        video_file = os.path.join(tmpdir, 'original_video.mp4')
+
+        # Download subtitle and video
+        if not download_from_gcs(BUCKET_VIDEO, 'videos/original_video.mp4', video_file):
+            return False
+        if not download_from_gcs(BUCKET_SUBTITLE, file_name, subtitle_file):
+            return False
+
+        # Publish a message to indicate the next step
+        publish_message('process_backgrounds', {'country': country, 'subtitle_file': subtitle_file, 'video_file': video_file})
+
+def process_backgrounds(data):
+    """Step 2: Process each background with the video and subtitle."""
+    country = data['country']
+    subtitle_file = data['subtitle_file']
+    video_file = data['video_file']
     
     with tempfile.TemporaryDirectory() as tmpdir:
-        title_file = os.path.join(tmpdir, f'{country}_title.txt')
-        video_file = os.path.join(tmpdir, 'original_video.mp4')
-        subtitle_file = os.path.join(tmpdir, f'{country}.srt')
-        
-        # 파일 다운로드
-        title_blob = find_title_file(BUCKET_TITLE, country)
-        if title_blob:
-            download_from_gcs(BUCKET_TITLE, title_blob, title_file)
-            with open(title_file, 'r', encoding='utf-8') as f:
-                title_text = f.read().strip()
+        title_file_path = os.path.join(tmpdir, f'{country}_title.txt')
+        title_blob_name = find_title_file(BUCKET_TITLE, country)
+
+        # Download the title file
+        if title_blob_name:
+            if not download_from_gcs(BUCKET_TITLE, title_blob_name, title_file_path):
+                title_text = f"Video for {country}"
+            else:
+                with open(title_file_path, 'r', encoding='utf-8') as f:
+                    title_text = f.read().strip()
         else:
             title_text = f"Video for {country}"
-        
-        download_from_gcs(BUCKET_VIDEO, 'videos/original_video.mp4', video_file)
-        download_from_gcs(BUCKET_SUBTITLE, data['name'], subtitle_file)
-        
-        with open(subtitle_file, 'r', encoding='utf-8') as f:
-            subtitle_lines = f.readlines()[2:]
-            subtitle_text = ' '.join([line.strip() for line in subtitle_lines if line.strip()])
-        
-        # 비디오 처리
+
         backgrounds = ['background1.png', 'background2.png', 'background3.png']
         for bg in backgrounds:
-            bg_file = os.path.join(tmpdir, bg)
+            background_file = os.path.join(tmpdir, bg)
             output_file = os.path.join(tmpdir, f'{country}_{bg.split(".")[0]}_shorts.mp4')
             
-            download_from_gcs(BUCKET_BACKGROUND, bg, bg_file)
-            if create_shorts_video(bg_file, video_file, output_file, title_text, subtitle_text):
-                upload_to_gcs(BUCKET_OUTPUT, output_file, f'{country}/{bg.split(".")[0]}_shorts.mp4')
+            if not download_from_gcs(BUCKET_BACKGROUND, bg, background_file):
+                continue
+            
+            if create_shorts_video(background_file, video_file, output_file, title_text, subtitle_file):
+                # Publish a message to trigger the upload
+                publish_message('upload_video', {'output_file': output_file, 'country': country, 'bg': bg})
     
-    logging.info(f"Completed processing video for {country}")
-    return f"Processed video for {country}"
-
-def enqueue_video_processing(data):
-    task = {
-        'http_request': {
-            'http_method': tasks_v2.HttpMethod.POST,
-            'url': 'https://subtitle-service-22hpg2idaq-uc.a.run.app/process_video',
-            'body': json.dumps(data).encode()
-        }
-    }
-    response = tasks_client.create_task(parent=QUEUE_PATH, task=task)
-    logging.info(f"Created task: {response.name}")
-    return response
-
-def main(request):
-    if request.method == 'POST':
-        data = request.get_json()
-        if 'process' in data:
-            return process_video(data)
-        else:
-            enqueue_video_processing(data)
-            return 'Task enqueued', 202
+def upload_video(data):
+    """Step 3: Upload the processed video to GCS."""
+    output_file = data['output_file']
+    country = data['country']
+    bg = data['bg']
+    destination_blob_name = f'{country}/{bg.split(".")[0]}_shorts.mp4'
+    
+    if upload_to_gcs(BUCKET_OUTPUT, output_file, destination_blob_name):
+        logging.info(f"Successfully uploaded {output_file} for {country} with background {bg}")
     else:
-        return 'Send a POST request to process video', 400
+        logging.error(f"Failed to upload video for {country} with background {bg}")
+
+def handle_pubsub_message(message):
+    """Handles incoming Pub/Sub messages and triggers the appropriate function."""
+    message_data = eval(message.data.decode('utf-8'))  # convert string back to dictionary
+    step = message_data['step']
+    data = message_data['data']
+    
+    if step == 'process_backgrounds':
+        process_backgrounds(data)
+    elif step == 'upload_video':
+        upload_video(data)
+
+    message.ack()
+
+def start_processing(data):
+    """Initial entry point for the workflow."""
+    download_files(data)
 
 if __name__ == "__main__":
     test_data = {
-        'name': 'america/original_video.mp4.srt'
+        'name': 'indonesia/original_video.mp4.srt'
     }
-    result = main(type('Request', (), {'method': 'POST', 'get_json': lambda: test_data})())
-    print(result)
+    start_processing(test_data)
+
+    # Pub/Sub subscriber to listen for messages
+    subscription_path = SUBSCRIPTION_NAME
+    streaming_pull_future = subscriber.subscribe(subscription_path, callback=handle_pubsub_message)
+    
+    with subscriber:
+        try:
+            streaming_pull_future.result()
+        except KeyboardInterrupt:
+            streaming_pull_future.cancel()
