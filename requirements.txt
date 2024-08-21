@@ -7,3 +7,4 @@ openai==0.28.0
 git+https://github.com/openai/whisper.git
 google-cloud-storage
 ffmpeg-python
+google-cloud-pubsub==2.10.0
