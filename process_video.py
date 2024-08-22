@@ -20,10 +20,12 @@ BUCKET_OUTPUT = 'allcloudstorage4'
 def find_title_file(bucket_name, country):
     """제목 파일을 찾는 함수"""
     try:
+        logger.info(f"Searching for title file in bucket {bucket_name} for country {country}")
         bucket = storage_client.bucket(bucket_name)
         blobs = bucket.list_blobs(prefix=f"text/{country}/")
         for blob in blobs:
             if blob.name.lower().endswith('.txt'):
+                logger.info(f"Found title file: {blob.name}")
                 return blob.name
         logger.warning(f"No title file found for {country}")
         return None
@@ -34,6 +36,8 @@ def find_title_file(bucket_name, country):
 def create_shorts_video(background_file, video_file, output_file, title_text, subtitle_file):
     """비디오 생성 함수"""
     try:
+        logger.info(f"Creating shorts video with background: {background_file}, video: {video_file}, output: {output_file}")
+        logger.info(f"Title text: {title_text}, Subtitle file: {subtitle_file}")
         (
             ffmpeg
             .input(background_file)
@@ -47,7 +51,7 @@ def create_shorts_video(background_file, video_file, output_file, title_text, su
         logger.info(f"Created shorts video: {output_file}")
         return True
     except ffmpeg.Error as e:
-        logger.error(f"Error creating shorts video: {e.stderr.decode()}")
+        logger.error(f"FFmpeg error creating shorts video: {e.stderr.decode()}")
         return False
     except Exception as e:
         logger.exception(f"Unexpected error creating shorts video: {e}")
@@ -56,10 +60,12 @@ def create_shorts_video(background_file, video_file, output_file, title_text, su
 def process_video(data):
     """비디오 처리 메인 함수"""
     try:
+        logger.info(f"Starting video processing with data: {data}")
         file_name = data.get('name')
         if not file_name:
             raise ValueError("No 'name' provided in the data")
         country = file_name.split('/')[0].capitalize()
+        logger.info(f"Processing video for country: {country}")
         
         tmp_dir = '/tmp'
         background_file = os.path.join(tmp_dir, 'background.png')
@@ -67,6 +73,7 @@ def process_video(data):
         subtitle_file = os.path.join(tmp_dir, 'subtitle.srt')
         
         # 파일 다운로드
+        logger.info("Downloading necessary files")
         storage_client.bucket(BUCKET_BACKGROUND).blob('background1.png').download_to_filename(background_file)
         storage_client.bucket(BUCKET_VIDEO).blob('videos/original_video.mp4').download_to_filename(video_file)
         storage_client.bucket(BUCKET_SUBTITLE).blob(file_name).download_to_filename(subtitle_file)
@@ -79,8 +86,10 @@ def process_video(data):
             with open(title_file, 'r', encoding='utf-8') as f:
                 title_text = f.read().strip()
             os.remove(title_file)  # 임시 제목 파일 삭제
+            logger.info(f"Title text: {title_text}")
         else:
             title_text = f"Video for {country}"
+            logger.info(f"Using default title text: {title_text}")
 
         output_file = os.path.join(tmp_dir, f'{country}_shorts.mp4')
         
@@ -95,6 +104,7 @@ def process_video(data):
         for file in [background_file, video_file, subtitle_file, output_file]:
             if os.path.exists(file):
                 os.remove(file)
+                logger.info(f"Removed temporary file: {file}")
 
         return {"status": "success", "message": f"Processed video for {country}"}
     except Exception as e:
@@ -105,7 +115,11 @@ def main(request):
     """Cloud Run 진입점"""
     try:
         logger.info("Starting video processing")
-        data = request.get_json()
+        logger.info(f"Request type: {type(request)}")
+        logger.info(f"Request content: {request}")
+        
+        # Cloud Run에서는 request가 이미 딕셔너리 형태일 수 있습니다.
+        data = request if isinstance(request, dict) else request.get_json()
         if not data:
             raise ValueError("No data provided in the request")
         
@@ -115,3 +129,8 @@ def main(request):
     except Exception as e:
         logger.exception(f"Error in main function: {e}")
         return {"status": "error", "message": str(e)}, 500
+
+if __name__ == "__main__":
+    # 로컬 테스트를 위한 코드
+    test_request = {"name": "usa/subtitle.srt"}
+    print(main(test_request))
