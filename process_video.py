@@ -1,5 +1,7 @@
 import os
 import logging
+import uuid
+import shutil
 from google.cloud import storage
 import ffmpeg
 
@@ -16,6 +18,17 @@ BUCKET_BACKGROUND = 'allcloudstorage2'
 BUCKET_SUBTITLE = 'allcloudstorage3'
 BUCKET_VIDEO = 'allcloudvideo'
 BUCKET_OUTPUT = 'allcloudstorage4'
+
+def check_tmp_directory():
+    if not os.path.exists('/tmp'):
+        logger.error("/tmp directory does not exist")
+        return False
+    if not os.access('/tmp', os.W_OK):
+        logger.error("No write permission to /tmp")
+        return False
+    total, used, free = shutil.disk_usage("/tmp")
+    logger.info(f"Free space in /tmp: {free // (2**20)} MB")
+    return True
 
 def find_title_file(bucket_name, country):
     """제목 파일을 찾는 함수"""
@@ -60,6 +73,9 @@ def create_shorts_video(background_file, video_file, output_file, title_text, su
 def process_video(data):
     """비디오 처리 메인 함수"""
     try:
+        if not check_tmp_directory():
+            raise EnvironmentError("Temporary directory is not accessible or has insufficient space")
+
         logger.info(f"Starting video processing with data: {data}")
         file_name = data.get('name')
         if not file_name:
@@ -68,30 +84,41 @@ def process_video(data):
         logger.info(f"Processing video for country: {country}")
         
         tmp_dir = '/tmp'
-        background_file = os.path.join(tmp_dir, 'background.png')
-        video_file = os.path.join(tmp_dir, 'video.mp4')
-        subtitle_file = os.path.join(tmp_dir, 'subtitle.srt')
+        unique_id = str(uuid.uuid4())
+        background_file = os.path.join(tmp_dir, f'background_{unique_id}.png')
+        video_file = os.path.join(tmp_dir, f'video_{unique_id}.mp4')
+        subtitle_file = os.path.join(tmp_dir, f'subtitle_{unique_id}.srt')
         
         # 파일 다운로드
         logger.info("Downloading necessary files")
-        storage_client.bucket(BUCKET_BACKGROUND).blob('background1.png').download_to_filename(background_file)
-        storage_client.bucket(BUCKET_VIDEO).blob('videos/original_video.mp4').download_to_filename(video_file)
-        storage_client.bucket(BUCKET_SUBTITLE).blob(file_name).download_to_filename(subtitle_file)
+        try:
+            storage_client.bucket(BUCKET_BACKGROUND).blob('background1.png').download_to_filename(background_file)
+            storage_client.bucket(BUCKET_VIDEO).blob('videos/original_video.mp4').download_to_filename(video_file)
+            storage_client.bucket(BUCKET_SUBTITLE).blob(file_name).download_to_filename(subtitle_file)
+            logger.info("All files downloaded successfully")
+        except Exception as e:
+            logger.error(f"Error downloading files: {e}")
+            raise
 
         # 제목 파일 처리
         title_blob_name = find_title_file(BUCKET_TITLE, country)
         if title_blob_name:
-            title_file = os.path.join(tmp_dir, 'title.txt')
-            storage_client.bucket(BUCKET_TITLE).blob(title_blob_name).download_to_filename(title_file)
-            with open(title_file, 'r', encoding='utf-8') as f:
-                title_text = f.read().strip()
-            os.remove(title_file)  # 임시 제목 파일 삭제
-            logger.info(f"Title text: {title_text}")
+            title_file = os.path.join(tmp_dir, f'title_{unique_id}.txt')
+            try:
+                storage_client.bucket(BUCKET_TITLE).blob(title_blob_name).download_to_filename(title_file)
+                logger.info(f"Successfully downloaded title file to {title_file}")
+                with open(title_file, 'r', encoding='utf-8') as f:
+                    title_text = f.read().strip()
+                os.remove(title_file)
+                logger.info(f"Title text: {title_text}")
+            except Exception as e:
+                logger.error(f"Error processing title file: {e}")
+                title_text = f"Video for {country}"
         else:
             title_text = f"Video for {country}"
             logger.info(f"Using default title text: {title_text}")
 
-        output_file = os.path.join(tmp_dir, f'{country}_shorts.mp4')
+        output_file = os.path.join(tmp_dir, f'{country}_shorts_{unique_id}.mp4')
         
         if create_shorts_video(background_file, video_file, output_file, title_text, subtitle_file):
             destination_blob_name = f'{country}/background1_shorts.mp4'
@@ -118,7 +145,6 @@ def main(request):
         logger.info(f"Request type: {type(request)}")
         logger.info(f"Request content: {request}")
         
-        # Cloud Run에서는 request가 이미 딕셔너리 형태일 수 있습니다.
         data = request if isinstance(request, dict) else request.get_json()
         if not data:
             raise ValueError("No data provided in the request")
