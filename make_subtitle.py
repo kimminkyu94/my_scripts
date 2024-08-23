@@ -3,7 +3,7 @@ import openai
 import logging
 import requests
 import traceback
-from google.cloud import storage
+from pyairtable import Table
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -100,30 +100,25 @@ def extract_subtitles(video_url):
     logging.info("Subtitles extraction succeeded.")
     return subtitles
 
-def save_to_cloud_storage(video_url, subtitles):
-    logging.info(f"Attempting to save subtitles to Cloud Storage")
+def update_airtable(record_id, subtitles):
+    logging.info(f"Updating Airtable record: {record_id}")
     try:
-        storage_client = storage.Client()
-        bucket = storage_client.bucket('allcloudstorage2')
-        blob = bucket.blob(f"{os.path.basename(video_url)}.srt")
-        logging.debug(f"Blob path: {blob.name}")
-        logging.debug(f"Subtitles before saving: {subtitles}")
-        
-        # UTF-8로 디코딩한 후 다시 인코딩
-        decoded_subtitles = subtitles.encode('latin1').decode('utf-8')
-        
-        logging.debug(f"Subtitles after decoding: {decoded_subtitles[:100]}")  # 처음 100자만 로깅
-        
-        blob.upload_from_string(decoded_subtitles, content_type="text/plain; charset=utf-8")
-        logging.info(f"Subtitles saved to Cloud Storage: {blob.name}")
+        AIRTABLE_TOKEN = os.getenv('AIRTABLE_TOKEN')
+        AIRTABLE_BASE_ID = os.getenv('AIRTABLE_BASE_ID')
+        AIRTABLE_TABLE_NAME = os.getenv('AIRTABLE_TABLE_NAME')
+
+        table = Table(AIRTABLE_TOKEN, AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
+        table.update(record_id, {'자막': subtitles, '자막 생성 상태': '완료'})
+        logging.info(f"Airtable record {record_id} updated successfully")
     except Exception as e:
-        logging.error(f"Error saving subtitles to Cloud Storage: {e}")
+        logging.error(f"Error updating Airtable: {e}")
         logging.error("Stack trace: %s", traceback.format_exc())
         raise
 
 def main(data):
     try:
         video_url = data.get('videoUrl')
+        record_id = data.get('record_id')
         if not video_url:
             raise ValueError("Video URL is missing")
 
@@ -131,7 +126,7 @@ def main(data):
             raise ValueError("Invalid video URL")
 
         subtitles = extract_subtitles(video_url)
-        save_to_cloud_storage(video_url, subtitles)
+        update_airtable(record_id, subtitles)
         return {"message": "Subtitles generated and saved successfully", "subtitles": subtitles}
     except Exception as e:
         logging.error(f"Error in processing: {e}")
@@ -139,6 +134,6 @@ def main(data):
 
 if __name__ == "__main__":
     # 테스트를 위한 샘플 데이터
-    test_data = {"videoUrl": "https://example.com/sample_video.mp4"}
+    test_data = {"videoUrl": "https://example.com/sample_video.mp4", "record_id": "rec123456"}
     result = main(test_data)
     print(result)
